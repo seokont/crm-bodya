@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          Int       @id @default(autoincrement())
+  name        String
+  email       String    @unique
+  passwordHash String?
+  role        UserRole  @default(MANAGER)
+  isActive    Boolean   @default(true)
+  lastLoginAt DateTime?
+  clients     Client[]
+  activities  ClientActivity[]
+  deals       ClientDeal[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([name])
+  @@index([role])
+  @@index([isActive])
+}
+
+model Client {
+  id             Int          @id @default(autoincrement())
+  type           ClientType   @default(COMPANY)
+  companyName    String?
+  contactName    String?
+  phone          String?
+  secondaryPhone String?
+  email          String?
+  edrpou         String?
+  city           String?
+  address        String?
+  website        String?
+  status         ClientStatus @default(NEW)
+  source         String?
+  managerId      Int?
+  manager        User?        @relation(fields: [managerId], references: [id], onDelete: SetNull)
+  activities     ClientActivity[]
+  deals          ClientDeal[]
+  comment        String?      @db.Text
+  isArchived     Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([companyName])
+  @@index([contactName])
+  @@index([phone])
+  @@index([email])
+  @@index([edrpou])
+  @@index([status])
+  @@index([source])
+  @@index([city])
+  @@index([managerId])
+  @@index([createdAt])
+  @@index([isArchived])
+}
+
+model ClientActivity {
+  id         Int          @id @default(autoincrement())
+  type       ActivityType @default(NOTE)
+  content    String       @db.Text
+  occurredAt DateTime     @default(now())
+  clientId   Int
+  client     Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  authorId   Int?
+  author     User?        @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorName String
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([clientId, occurredAt])
+  @@index([authorId])
+  @@index([type])
+}
+
+model ClientDeal {
+  id              Int       @id @default(autoincrement())
+  title           String
+  amount          Decimal   @default(0) @db.Decimal(14, 2)
+  currency        String    @default("UAH") @db.VarChar(3)
+  stage           DealStage @default(NEW)
+  expectedCloseAt DateTime?
+  description     String?   @db.Text
+  clientId        Int
+  client          Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  ownerId         Int?
+  owner           User?     @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerName       String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([clientId, stage])
+  @@index([ownerId])
+  @@index([expectedCloseAt])
+  @@index([stage])
+}
+
+enum ClientType {
+  PERSON
+  FOP
+  COMPANY
+}
+
+enum ClientStatus {
+  NEW
+  IN_PROGRESS
+  CONTACTED
+  WAITING
+  INTERESTED
+  NOT_INTERESTED
+  CLIENT
+  REJECTED
+  ARCHIVED
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+}
+
+enum ActivityType {
+  NOTE
+  CALL
+  EMAIL
+  MEETING
+  STATUS_CHANGE
+  SYSTEM
+}
+
+enum DealStage {
+  NEW
+  QUALIFICATION
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
