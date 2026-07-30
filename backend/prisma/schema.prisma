@@ -21,6 +21,7 @@ model User {
   deals       ClientDeal[]
   documents   ClientDocument[]
   comments    ClientComment[]
+  teamMessages TeamMessage[]
   createdTasks ClientTask[]     @relation("TaskCreator")
   assignedTasks ClientTask[]    @relation("TaskAssignee")
   createdAt   DateTime  @default(now())
@@ -29,6 +30,19 @@ model User {
   @@index([name])
   @@index([role])
   @@index([isActive])
+}
+
+model TeamMessage {
+  id         Int      @id @default(autoincrement())
+  content    String   @db.Text
+  authorId   Int?
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorName String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([authorId])
+  @@index([createdAt])
 }
 
 model Client {

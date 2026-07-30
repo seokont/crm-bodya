@@ -6,6 +6,7 @@ import { BackupsModule } from './modules/backups/backups.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { ManagersModule } from './modules/managers/managers.module';
 import { OverviewModule } from './modules/overview/overview.module';
+import { TeamChatModule } from './modules/team-chat/team-chat.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -15,6 +16,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AuthModule,
     BackupsModule,
     OverviewModule,
+    TeamChatModule,
     ClientsModule,
     ManagersModule,
   ],

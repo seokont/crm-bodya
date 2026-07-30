@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useDisplay } from "vuetify";
 import { backupsApi } from "@/services/backups.api";
 import { getApiError } from "@/services/http";
 import { useAuthStore } from "@/stores/auth";
+import { useTeamChatStore } from "@/stores/team-chat";
 
 const { mdAndUp } = useDisplay();
 const route = useRoute();
+const router = useRouter();
 const auth = useAuthStore();
+const teamChat = useTeamChatStore();
 const mobileMenu = ref(false);
 const largeText = ref(localStorage.getItem("bodya-large-text") === "true");
 const backupLoading = ref(false);
@@ -26,6 +29,7 @@ const navigation = computed(() => [
     to: "/tasks",
   },
   { title: "Аналітика", icon: "mdi-chart-box-outline", to: "/analytics" },
+  { title: "Командний чат", icon: "mdi-forum-outline", to: "/chat" },
   ...(auth.isAdmin
     ? [{ title: "Менеджери", icon: "mdi-account-tie-outline", to: "/team" }]
     : []),
@@ -48,9 +52,19 @@ const roleLabel = computed(() =>
 const fontButtonLabel = computed(() =>
   largeText.value ? "Звичайний шрифт" : "Збільшити шрифт",
 );
+const chatNotificationLabel = computed(() =>
+  teamChat.unreadCount
+    ? `Нові повідомлення в чаті: ${teamChat.unreadCount}`
+    : "Відкрити командний чат",
+);
 
 function toggleLargeText() {
   largeText.value = !largeText.value;
+}
+
+function openTeamChat() {
+  mobileMenu.value = false;
+  void router.push("/chat");
 }
 
 async function downloadBackup() {
@@ -73,6 +87,26 @@ watch(
   (enabled) => {
     document.documentElement.classList.toggle("large-text", enabled);
     localStorage.setItem("bodya-large-text", String(enabled));
+  },
+  { immediate: true },
+);
+
+watch(
+  () => auth.user?.id,
+  (userId) => {
+    if (userId) {
+      void teamChat.connect(userId);
+    } else {
+      teamChat.disconnect();
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  () => route.path,
+  (path) => {
+    if (path === "/chat") teamChat.markRead();
   },
   { immediate: true },
 );
@@ -104,6 +138,21 @@ watch(
             <div class="brand__name">Bodya</div>
             <div class="brand__caption">CRM-простір</div>
           </div>
+          <v-btn
+            class="chat-notification-button ml-auto"
+            :class="{ 'has-unread': teamChat.unreadCount > 0 }"
+            icon
+            variant="text"
+            size="small"
+            :aria-label="chatNotificationLabel"
+            @click="openTeamChat"
+          >
+            <v-icon icon="mdi-bell-outline" />
+            <span
+              v-if="teamChat.unreadCount"
+              class="chat-notification-dot"
+            />
+          </v-btn>
         </div>
 
         <div class="sidebar-label">Робочий простір</div>
@@ -194,6 +243,20 @@ watch(
           <div class="brand__name">Bodya</div>
         </div>
         <v-spacer />
+        <v-btn
+          class="chat-notification-button"
+          :class="{ 'has-unread': teamChat.unreadCount > 0 }"
+          icon
+          variant="text"
+          :aria-label="chatNotificationLabel"
+          @click="openTeamChat"
+        >
+          <v-icon icon="mdi-bell-outline" />
+          <span
+            v-if="teamChat.unreadCount"
+            class="chat-notification-dot"
+          />
+        </v-btn>
         <v-btn
           icon="mdi-format-size"
           variant="text"

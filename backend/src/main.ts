@@ -29,6 +29,7 @@ async function bootstrap() {
     .addTag('clients', 'Керування клієнтами')
     .addTag('tasks', 'Глобальне керування завданнями')
     .addTag('analytics', 'Зведена аналітика CRM')
+    .addTag('team chat', 'Внутрішнє спілкування команди')
     .addTag('managers', 'Довідник менеджерів')
     .build();
 

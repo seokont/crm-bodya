@@ -53,6 +53,12 @@ const router = createRouter({
       meta: { title: 'Аналітика' },
     },
     {
+      path: '/chat',
+      name: 'team-chat',
+      component: () => import('@/pages/team-chat/TeamChatPage.vue'),
+      meta: { title: 'Командний чат' },
+    },
+    {
       path: '/team',
       name: 'team',
       component: () => import('@/pages/admin/ManagersPage.vue'),

@@ -106,27 +106,45 @@ const taskColumns = [
   'updatedAt',
 ];
 
+const teamMessageColumns = [
+  'id',
+  'content',
+  'authorId',
+  'authorName',
+  'createdAt',
+  'updatedAt',
+];
+
 @Injectable()
 export class BackupsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createDatabaseBackup() {
     const generatedAt = new Date();
-    const [users, clients, activities, deals, documents, comments, tasks] =
-      await Promise.all([
-        this.prisma.user.findMany({ orderBy: { id: 'asc' } }),
-        this.prisma.client.findMany({ orderBy: { id: 'asc' } }),
-        this.prisma.clientActivity.findMany({ orderBy: { id: 'asc' } }),
-        this.prisma.clientDeal.findMany({ orderBy: { id: 'asc' } }),
-        this.prisma.clientDocument.findMany({ orderBy: { id: 'asc' } }),
-        this.prisma.clientComment.findMany({ orderBy: { id: 'asc' } }),
-        this.prisma.clientTask.findMany({ orderBy: { id: 'asc' } }),
-      ]);
+    const [
+      users,
+      clients,
+      activities,
+      deals,
+      documents,
+      comments,
+      tasks,
+      teamMessages,
+    ] = await Promise.all([
+      this.prisma.user.findMany({ orderBy: { id: 'asc' } }),
+      this.prisma.client.findMany({ orderBy: { id: 'asc' } }),
+      this.prisma.clientActivity.findMany({ orderBy: { id: 'asc' } }),
+      this.prisma.clientDeal.findMany({ orderBy: { id: 'asc' } }),
+      this.prisma.clientDocument.findMany({ orderBy: { id: 'asc' } }),
+      this.prisma.clientComment.findMany({ orderBy: { id: 'asc' } }),
+      this.prisma.clientTask.findMany({ orderBy: { id: 'asc' } }),
+      this.prisma.teamMessage.findMany({ orderBy: { id: 'asc' } }),
+    ]);
 
     const sql = [
       '-- Резервна копія даних Bodya CRM',
       `-- Створено: ${generatedAt.toISOString()}`,
-      `-- Користувачів: ${users.length}; клієнтів: ${clients.length}; активностей: ${activities.length}; угод: ${deals.length}; документів: ${documents.length}; коментарів: ${comments.length}; завдань: ${tasks.length}`,
+      `-- Користувачів: ${users.length}; клієнтів: ${clients.length}; активностей: ${activities.length}; угод: ${deals.length}; документів: ${documents.length}; коментарів: ${comments.length}; завдань: ${tasks.length}; повідомлень чату: ${teamMessages.length}`,
       '',
       'SET NAMES utf8mb4;',
       'SET FOREIGN_KEY_CHECKS = 0;',
@@ -137,6 +155,7 @@ export class BackupsService {
       'DELETE FROM `ClientDocument`;',
       'DELETE FROM `ClientComment`;',
       'DELETE FROM `ClientTask`;',
+      'DELETE FROM `TeamMessage`;',
       'DELETE FROM `Client`;',
       'DELETE FROM `User`;',
       '',
@@ -154,6 +173,8 @@ export class BackupsService {
       '',
       this.renderInsert('ClientTask', taskColumns, tasks),
       '',
+      this.renderInsert('TeamMessage', teamMessageColumns, teamMessages),
+      '',
       `ALTER TABLE \`User\` AUTO_INCREMENT = ${this.nextId(users)};`,
       `ALTER TABLE \`Client\` AUTO_INCREMENT = ${this.nextId(clients)};`,
       `ALTER TABLE \`ClientActivity\` AUTO_INCREMENT = ${this.nextId(activities)};`,
@@ -161,6 +182,7 @@ export class BackupsService {
       `ALTER TABLE \`ClientDocument\` AUTO_INCREMENT = ${this.nextId(documents)};`,
       `ALTER TABLE \`ClientComment\` AUTO_INCREMENT = ${this.nextId(comments)};`,
       `ALTER TABLE \`ClientTask\` AUTO_INCREMENT = ${this.nextId(tasks)};`,
+      `ALTER TABLE \`TeamMessage\` AUTO_INCREMENT = ${this.nextId(teamMessages)};`,
       '',
       'COMMIT;',
       'SET FOREIGN_KEY_CHECKS = 1;',
