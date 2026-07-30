@@ -34,7 +34,7 @@ export class CommentsService {
     return this.prisma.clientComment.findMany({
       where: { clientId },
       select: commentSelect,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
   }
 

@@ -575,19 +575,20 @@ onMounted(async () => {
               </div>
             </div>
 
-            <div v-if="client.comment" class="comment-box">
-              <div class="comment-label">
-                <v-icon icon="mdi-text-box-outline" size="16" />
-                Коментар
-              </div>
-              <p>{{ client.comment }}</p>
-            </div>
+          </v-card>
+
+          <v-card class="section-card comments-card">
+            <ClientCommentsPanel
+              :client-id="client.id"
+              :initial-comment="client.comment"
+              :initial-author-name="creatorDisplayName"
+              :initial-created-at="client.createdAt"
+            />
           </v-card>
 
           <v-card class="section-card activity-card">
             <v-tabs v-model="activeTab" color="primary" class="activity-tabs">
               <v-tab value="overview">Активність</v-tab>
-              <v-tab value="comments">Коментарі</v-tab>
               <v-tab value="tasks">Завдання</v-tab>
               <v-tab value="deals">Угоди</v-tab>
               <v-tab value="documents">Документи</v-tab>
@@ -791,9 +792,6 @@ onMounted(async () => {
                     </v-btn>
                   </div>
                 </div>
-              </v-window-item>
-              <v-window-item value="comments">
-                <ClientCommentsPanel :client-id="client.id" />
               </v-window-item>
               <v-window-item value="deals">
                 <div class="deals-panel">
@@ -1341,32 +1339,6 @@ onMounted(async () => {
   display: block;
   margin-top: 3px;
   color: #89949c;
-}
-
-.comment-box {
-  margin-top: 26px;
-  padding: 16px 18px;
-  border-left: 3px solid #f1b76c;
-  border-radius: 0 12px 12px 0;
-  background: #faf7f1;
-}
-
-.comment-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #9a7044;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.comment-box p {
-  margin: 8px 0 0;
-  color: #59666f;
-  font-size: 13px;
-  line-height: 1.6;
 }
 
 .activity-card {

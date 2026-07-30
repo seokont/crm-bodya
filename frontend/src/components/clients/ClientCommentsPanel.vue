@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { clientsApi } from '@/services/clients.api';
 import { getApiError } from '@/services/http';
 import { useAuthStore } from '@/stores/auth';
@@ -7,6 +7,9 @@ import type { ClientComment } from '@/types/client';
 
 const props = defineProps<{
   clientId: number;
+  initialComment?: string | null;
+  initialAuthorName?: string | null;
+  initialCreatedAt?: string | null;
 }>();
 
 const auth = useAuthStore();
@@ -22,6 +25,9 @@ const deleteDialog = ref(false);
 const snackbar = ref(false);
 const snackbarMessage = ref('');
 const snackbarColor = ref('primary');
+const totalComments = computed(
+  () => comments.value.length + (props.initialComment?.trim() ? 1 : 0),
+);
 
 function notify(message: string, color = 'primary') {
   snackbarMessage.value = message;
@@ -87,7 +93,7 @@ async function addComment() {
   saving.value = true;
   try {
     const comment = await clientsApi.createComment(props.clientId, value);
-    comments.value = [comment, ...comments.value];
+    comments.value = [...comments.value, comment];
     content.value = '';
     notify('Коментар додано');
   } catch (error) {
@@ -163,11 +169,11 @@ onMounted(fetchComments);
       <div>
         <h3>Коментарі</h3>
         <p>
-          {{ comments.length }}
+          {{ totalComments }}
           {{
-            comments.length === 1
+            totalComments === 1
               ? 'коментар'
-              : comments.length > 1 && comments.length < 5
+              : totalComments > 1 && totalComments < 5
                 ? 'коментарі'
                 : 'коментарів'
           }}
@@ -179,6 +185,98 @@ onMounted(fetchComments);
       </div>
     </div>
 
+    <div class="comment-thread">
+      <article
+        v-if="initialComment"
+        class="comment-card comment-card--initial"
+      >
+        <v-avatar size="40" color="#f7e8dc" class="comment-avatar initial-avatar">
+          {{ initials(initialAuthorName || 'CRM') }}
+        </v-avatar>
+
+        <div class="comment-body">
+          <div class="comment-author">
+            <strong>{{ initialAuthorName || 'Автор картки' }}</strong>
+            <span class="initial-badge">Початковий коментар</span>
+          </div>
+          <p>{{ initialComment }}</p>
+        </div>
+
+        <div v-if="initialCreatedAt" class="comment-side">
+          <time :datetime="initialCreatedAt">
+            <strong>{{ formatTimestamp(initialCreatedAt).time }}</strong>
+            <span>{{ formatTimestamp(initialCreatedAt).date }}</span>
+          </time>
+        </div>
+      </article>
+
+      <div v-if="loading" class="comments-loading">
+        <v-skeleton-loader
+          v-for="index in 3"
+          :key="index"
+          type="list-item-avatar-three-line"
+        />
+      </div>
+
+      <div v-else-if="comments.length" class="comment-list">
+        <article
+          v-for="comment in comments"
+          :key="comment.id"
+          class="comment-card"
+        >
+          <v-avatar size="40" color="#edf3f0" class="comment-avatar">
+            {{ initials(comment.authorName) }}
+          </v-avatar>
+
+          <div class="comment-body">
+            <div class="comment-author">
+              <strong>{{ comment.authorName }}</strong>
+              <span v-if="wasEdited(comment)">відредаговано</span>
+            </div>
+            <p>{{ comment.content }}</p>
+          </div>
+
+          <div class="comment-side">
+            <time :datetime="comment.createdAt">
+              <strong>{{ formatTimestamp(comment.createdAt).time }}</strong>
+              <span>{{ formatTimestamp(comment.createdAt).date }}</span>
+            </time>
+            <div v-if="canManage(comment)" class="comment-actions">
+              <v-btn
+                icon="mdi-pencil-outline"
+                size="x-small"
+                variant="text"
+                aria-label="Редагувати коментар"
+                @click="openEditor(comment)"
+              />
+              <v-btn
+                icon="mdi-delete-outline"
+                size="x-small"
+                variant="text"
+                color="error"
+                aria-label="Видалити коментар"
+                @click="requestDelete(comment)"
+              />
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <div v-else-if="!initialComment" class="comments-empty">
+        <div class="empty-icon">
+          <v-icon icon="mdi-comment-text-outline" size="29" />
+        </div>
+        <h3>Коментарів ще немає</h3>
+        <p>
+          Залиште перший коментар — його побачать усі менеджери та адміністратор.
+        </p>
+      </div>
+
+      <div v-else class="thread-empty">
+        Наступні коментарі з’являться тут як продовження початкового.
+      </div>
+    </div>
+
     <div class="comment-composer">
       <div class="composer-author">
         <v-avatar size="38" color="#e8f2ee">
@@ -186,12 +284,12 @@ onMounted(fetchComments);
         </v-avatar>
         <div>
           <strong>{{ auth.user?.name }}</strong>
-          <span>Новий коментар</span>
+          <span>Продовжити обговорення</span>
         </div>
       </div>
       <v-textarea
         v-model="content"
-        placeholder="Напишіть коментар для команди…"
+        placeholder="Напишіть продовження коментаря…"
         variant="outlined"
         rows="3"
         auto-grow
@@ -213,68 +311,6 @@ onMounted(fetchComments);
           Додати коментар
         </v-btn>
       </div>
-    </div>
-
-    <div v-if="loading" class="comments-loading">
-      <v-skeleton-loader
-        v-for="index in 3"
-        :key="index"
-        type="list-item-avatar-three-line"
-      />
-    </div>
-
-    <div v-else-if="comments.length" class="comment-list">
-      <article
-        v-for="comment in comments"
-        :key="comment.id"
-        class="comment-card"
-      >
-        <v-avatar size="40" color="#edf3f0" class="comment-avatar">
-          {{ initials(comment.authorName) }}
-        </v-avatar>
-
-        <div class="comment-body">
-          <div class="comment-author">
-            <strong>{{ comment.authorName }}</strong>
-            <span v-if="wasEdited(comment)">відредаговано</span>
-          </div>
-          <p>{{ comment.content }}</p>
-        </div>
-
-        <div class="comment-side">
-          <time :datetime="comment.createdAt">
-            <strong>{{ formatTimestamp(comment.createdAt).time }}</strong>
-            <span>{{ formatTimestamp(comment.createdAt).date }}</span>
-          </time>
-          <div v-if="canManage(comment)" class="comment-actions">
-            <v-btn
-              icon="mdi-pencil-outline"
-              size="x-small"
-              variant="text"
-              aria-label="Редагувати коментар"
-              @click="openEditor(comment)"
-            />
-            <v-btn
-              icon="mdi-delete-outline"
-              size="x-small"
-              variant="text"
-              color="error"
-              aria-label="Видалити коментар"
-              @click="requestDelete(comment)"
-            />
-          </div>
-        </div>
-      </article>
-    </div>
-
-    <div v-else class="comments-empty">
-      <div class="empty-icon">
-        <v-icon icon="mdi-comment-text-outline" size="29" />
-      </div>
-      <h3>Коментарів ще немає</h3>
-      <p>
-        Залиште перший коментар — його побачать усі менеджери та адміністратор.
-      </p>
     </div>
 
     <v-dialog v-model="editDialog" max-width="560" persistent>
@@ -391,6 +427,10 @@ onMounted(fetchComments);
   font-weight: 700;
 }
 
+.comment-thread {
+  margin-top: 20px;
+}
+
 .comment-composer {
   margin-top: 20px;
   padding: 18px;
@@ -444,11 +484,13 @@ onMounted(fetchComments);
 
 .comments-loading,
 .comment-list {
-  margin-top: 18px;
+  margin-top: 10px;
 }
 
 .comment-list {
   display: grid;
+  padding-left: 18px;
+  border-left: 2px solid #e2ebe7;
   gap: 10px;
 }
 
@@ -463,10 +505,20 @@ onMounted(fetchComments);
   background: #fff;
 }
 
+.comment-card--initial {
+  border-color: #ead8c4;
+  border-left: 3px solid #d87942;
+  background: #fffaf5;
+}
+
 .comment-avatar {
   color: #48746c;
   font-size: 10px;
   font-weight: 800;
+}
+
+.initial-avatar {
+  color: #ad693b;
 }
 
 .comment-body {
@@ -487,6 +539,15 @@ onMounted(fetchComments);
   color: #9aa2a8;
   font-size: 9px;
   font-style: italic;
+}
+
+.comment-author .initial-badge {
+  padding: 3px 7px;
+  border-radius: 7px;
+  color: #9b633e;
+  background: #f5e5d6;
+  font-style: normal;
+  font-weight: 700;
 }
 
 .comment-body p {
@@ -526,6 +587,15 @@ onMounted(fetchComments);
 .comment-actions {
   display: flex;
   margin-top: auto;
+}
+
+.thread-empty {
+  margin: 10px 0 0 18px;
+  padding: 13px 15px;
+  border-left: 2px solid #e2ebe7;
+  color: #929ca2;
+  background: #fafbf9;
+  font-size: 10px;
 }
 
 .comments-empty {
@@ -605,6 +675,10 @@ onMounted(fetchComments);
 
   .comment-card {
     grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .comment-list {
+    padding-left: 10px;
   }
 
   .comment-avatar {
