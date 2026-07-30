@@ -12,3 +12,4 @@ backend/.env
 frontend/.env
 work/
 outputs/
+uploads/

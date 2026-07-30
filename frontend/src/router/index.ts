@@ -41,6 +41,18 @@ const router = createRouter({
       meta: { title: 'Угоди' },
     },
     {
+      path: '/tasks',
+      name: 'tasks',
+      component: () => import('@/pages/tasks/TasksPage.vue'),
+      meta: { title: 'Завдання' },
+    },
+    {
+      path: '/analytics',
+      name: 'analytics',
+      component: () => import('@/pages/analytics/AnalyticsPage.vue'),
+      meta: { title: 'Аналітика' },
+    },
+    {
       path: '/team',
       name: 'team',
       component: () => import('@/pages/admin/ManagersPage.vue'),

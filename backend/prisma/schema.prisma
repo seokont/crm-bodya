@@ -15,9 +15,14 @@ model User {
   role        UserRole  @default(MANAGER)
   isActive    Boolean   @default(true)
   lastLoginAt DateTime?
-  clients     Client[]
+  clients     Client[]          @relation("ClientManager")
+  createdClients Client[]       @relation("ClientCreator")
   activities  ClientActivity[]
   deals       ClientDeal[]
+  documents   ClientDocument[]
+  comments    ClientComment[]
+  createdTasks ClientTask[]     @relation("TaskCreator")
+  assignedTasks ClientTask[]    @relation("TaskAssignee")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -41,9 +46,15 @@ model Client {
   status         ClientStatus @default(NEW)
   source         String?
   managerId      Int?
-  manager        User?        @relation(fields: [managerId], references: [id], onDelete: SetNull)
+  manager        User?        @relation("ClientManager", fields: [managerId], references: [id], onDelete: SetNull)
+  creatorId      Int?
+  creator        User?        @relation("ClientCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  creatorName    String?
   activities     ClientActivity[]
   deals          ClientDeal[]
+  documents      ClientDocument[]
+  comments       ClientComment[]
+  tasks          ClientTask[]
   comment        String?      @db.Text
   isArchived     Boolean      @default(false)
   createdAt      DateTime     @default(now())
@@ -58,6 +69,7 @@ model Client {
   @@index([source])
   @@index([city])
   @@index([managerId])
+  @@index([creatorId])
   @@index([createdAt])
   @@index([isArchived])
 }
@@ -102,6 +114,69 @@ model ClientDeal {
   @@index([stage])
 }
 
+model ClientDocument {
+  id           Int              @id @default(autoincrement())
+  title        String
+  originalName String           @db.VarChar(255)
+  storedName   String           @unique @db.VarChar(255)
+  mimeType     String           @db.VarChar(150)
+  size         Int
+  category     DocumentCategory @default(OTHER)
+  description  String?          @db.Text
+  clientId     Int
+  client       Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  uploaderId   Int?
+  uploader     User?            @relation(fields: [uploaderId], references: [id], onDelete: SetNull)
+  uploaderName String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([clientId, createdAt])
+  @@index([uploaderId])
+  @@index([category])
+}
+
+model ClientComment {
+  id         Int      @id @default(autoincrement())
+  content    String   @db.Text
+  clientId   Int
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  authorId   Int?
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorName String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([clientId, createdAt])
+  @@index([authorId])
+}
+
+model ClientTask {
+  id           Int          @id @default(autoincrement())
+  title        String
+  description  String?      @db.Text
+  status       TaskStatus   @default(TODO)
+  priority     TaskPriority @default(MEDIUM)
+  dueAt        DateTime?
+  completedAt  DateTime?
+  clientId     Int
+  client       Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  assigneeId   Int?
+  assignee     User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assigneeName String?
+  creatorId    Int?
+  creator      User?        @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  creatorName  String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([clientId, status])
+  @@index([assigneeId, status])
+  @@index([creatorId])
+  @@index([dueAt])
+  @@index([priority])
+}
+
 enum ClientType {
   PERSON
   FOP
@@ -141,4 +216,27 @@ enum DealStage {
   NEGOTIATION
   WON
   LOST
+}
+
+enum DocumentCategory {
+  CONTRACT
+  INVOICE
+  ACT
+  APPLICATION
+  POWER_OF_ATTORNEY
+  OTHER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }

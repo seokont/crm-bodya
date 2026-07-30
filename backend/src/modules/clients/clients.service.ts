@@ -23,6 +23,7 @@ import { DuplicateClientQueryDto } from './dto/duplicate-client-query.dto';
 import { DealFilterDto, DealSortBy } from './dto/deal-filter.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { UpdateClientDealDto } from './dto/update-client-deal.dto';
+import { DocumentsService } from './documents.service';
 
 const clientInclude = {
   manager: {
@@ -30,6 +31,14 @@ const clientInclude = {
       id: true,
       name: true,
       email: true,
+    },
+  },
+  creator: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
     },
   },
 } satisfies Prisma.ClientInclude;
@@ -118,7 +127,10 @@ const protectedActivityTypes: ActivityType[] = [
 
 @Injectable()
 export class ClientsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly documentsService: DocumentsService,
+  ) {}
 
   async findDuplicates(query: DuplicateClientQueryDto) {
     const companyName = query.companyName?.trim();
@@ -211,12 +223,18 @@ export class ClientsService {
 
   async create(dto: CreateClientDto, user: AuthUser) {
     const { managerId, ...data } = dto;
+    const responsibleManagerId =
+      managerId ?? (user.role === UserRole.MANAGER ? user.id : undefined);
 
     return this.prisma.$transaction(async (transaction) => {
       const client = await transaction.client.create({
         data: {
           ...data,
-          manager: managerId ? { connect: { id: managerId } } : undefined,
+          manager: responsibleManagerId
+            ? { connect: { id: responsibleManagerId } }
+            : undefined,
+          creator: { connect: { id: user.id } },
+          creatorName: user.name,
         },
         include: clientInclude,
       });
@@ -601,7 +619,14 @@ export class ClientsService {
   async remove(id: number) {
     const client = await this.prisma.client.findUnique({
       where: { id },
-      select: { id: true },
+      select: {
+        id: true,
+        documents: {
+          select: {
+            storedName: true,
+          },
+        },
+      },
     });
 
     if (!client) {
@@ -609,6 +634,9 @@ export class ClientsService {
     }
 
     await this.prisma.client.delete({ where: { id } });
+    await this.documentsService.removeStoredFiles(
+      client.documents.map((document) => document.storedName),
+    );
     return { success: true };
   }
 

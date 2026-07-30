@@ -1,6 +1,6 @@
 services:
   mysql:
-    image: mysql:8.4
+    image: ${MYSQL_IMAGE:-mysql:8.0-debian}
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
@@ -31,8 +31,11 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@bodya.crm}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe123!}
       DEMO_MANAGER_PASSWORD: ${DEMO_MANAGER_PASSWORD:-Manager123!}
+      DOCUMENTS_DIR: ${DOCUMENTS_DIR:-/app/uploads/documents}
     ports:
       - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      - documents_data:/app/uploads
     depends_on:
       mysql:
         condition: service_healthy
@@ -57,3 +60,4 @@ services:
 
 volumes:
   mysql_data:
+  documents_data:

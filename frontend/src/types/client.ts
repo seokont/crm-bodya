@@ -33,6 +33,14 @@ export interface Client {
   source: string | null;
   managerId: number | null;
   manager: Manager | null;
+  creatorId: number | null;
+  creatorName: string | null;
+  creator: {
+    id: number;
+    name: string;
+    email: string;
+    role: 'ADMIN' | 'MANAGER';
+  } | null;
   comment: string | null;
   isArchived: boolean;
   createdAt: string;
@@ -71,6 +79,92 @@ export interface CreateClientActivityPayload {
   type: ManualClientActivityType;
   content: string;
   occurredAt?: string;
+}
+
+export interface ClientComment {
+  id: number;
+  content: string;
+  clientId: number;
+  authorId: number | null;
+  authorName: string;
+  createdAt: string;
+  updatedAt: string;
+  author: {
+    id: number;
+    name: string;
+  } | null;
+}
+
+export type ClientTaskStatus =
+  | 'TODO'
+  | 'IN_PROGRESS'
+  | 'DONE'
+  | 'CANCELLED';
+
+export type ClientTaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+
+export interface ClientTask {
+  id: number;
+  title: string;
+  description: string | null;
+  status: ClientTaskStatus;
+  priority: ClientTaskPriority;
+  dueAt: string | null;
+  completedAt: string | null;
+  clientId: number;
+  assigneeId: number | null;
+  assigneeName: string | null;
+  creatorId: number | null;
+  creatorName: string;
+  createdAt: string;
+  updatedAt: string;
+  assignee: {
+    id: number;
+    name: string;
+    email: string;
+  } | null;
+  creator: {
+    id: number;
+    name: string;
+  } | null;
+}
+
+export interface ClientTaskPayload {
+  title: string;
+  description: string;
+  status: ClientTaskStatus;
+  priority: ClientTaskPriority;
+  dueAt: string | null;
+  assigneeId: number | null;
+}
+
+export interface TaskClientOption {
+  id: number;
+  companyName: string | null;
+  contactName: string | null;
+  managerId: number | null;
+  manager: {
+    id: number;
+    name: string;
+  } | null;
+}
+
+export interface GlobalClientTask extends ClientTask {
+  client: TaskClientOption & {
+    creatorId: number | null;
+  };
+}
+
+export interface TasksResponse {
+  items: GlobalClientTask[];
+  meta: PaginationMeta;
+  summary: {
+    total: number;
+    open: number;
+    done: number;
+    overdue: number;
+    today: number;
+  };
 }
 
 export type ClientDealStage =
@@ -139,6 +233,43 @@ export interface ClientDealPayload {
   stage: ClientDealStage;
   expectedCloseAt?: string | null;
   description?: string;
+}
+
+export type ClientDocumentCategory =
+  | 'CONTRACT'
+  | 'INVOICE'
+  | 'ACT'
+  | 'APPLICATION'
+  | 'POWER_OF_ATTORNEY'
+  | 'OTHER';
+
+export interface ClientDocument {
+  id: number;
+  title: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  category: ClientDocumentCategory;
+  description: string | null;
+  clientId: number;
+  uploaderId: number | null;
+  uploaderName: string;
+  createdAt: string;
+  updatedAt: string;
+  uploader: {
+    id: number;
+    name: string;
+  } | null;
+}
+
+export interface ClientDocumentPayload {
+  title: string;
+  category: ClientDocumentCategory;
+  description: string;
+}
+
+export interface UploadClientDocumentPayload extends ClientDocumentPayload {
+  file: File;
 }
 
 export interface ClientPayload {
@@ -261,6 +392,30 @@ export const CLIENT_DEAL_CURRENCIES: SelectOption<ClientDealCurrency>[] = [
   { title: '₴ UAH', value: 'UAH' },
   { title: '$ USD', value: 'USD' },
   { title: '€ EUR', value: 'EUR' },
+];
+
+export const CLIENT_DOCUMENT_CATEGORIES: SelectOption<ClientDocumentCategory>[] =
+  [
+    { title: 'Договір', value: 'CONTRACT' },
+    { title: 'Рахунок', value: 'INVOICE' },
+    { title: 'Акт', value: 'ACT' },
+    { title: 'Заява', value: 'APPLICATION' },
+    { title: 'Довіреність', value: 'POWER_OF_ATTORNEY' },
+    { title: 'Інше', value: 'OTHER' },
+  ];
+
+export const CLIENT_TASK_STATUSES: SelectOption<ClientTaskStatus>[] = [
+  { title: 'Заплановано', value: 'TODO' },
+  { title: 'У роботі', value: 'IN_PROGRESS' },
+  { title: 'Виконано', value: 'DONE' },
+  { title: 'Скасовано', value: 'CANCELLED' },
+];
+
+export const CLIENT_TASK_PRIORITIES: SelectOption<ClientTaskPriority>[] = [
+  { title: 'Низький', value: 'LOW' },
+  { title: 'Середній', value: 'MEDIUM' },
+  { title: 'Високий', value: 'HIGH' },
+  { title: 'Терміновий', value: 'URGENT' },
 ];
 
 export const emptyClientFilters = (): ClientFilters => ({

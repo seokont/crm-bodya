@@ -150,6 +150,8 @@ async function main() {
         status: ClientStatus.IN_PROGRESS,
         source: 'Google',
         managerId: managers[0].id,
+        creatorId: managers[0].id,
+        creatorName: managers[0].name,
         comment: 'Шукають рішення для відділу продажів із 15 осіб.',
       },
       {
@@ -163,6 +165,8 @@ async function main() {
         status: ClientStatus.CONTACTED,
         source: 'Instagram',
         managerId: managers[1].id,
+        creatorId: managers[1].id,
+        creatorName: managers[1].name,
       },
       {
         type: ClientType.COMPANY,
@@ -175,6 +179,8 @@ async function main() {
         status: ClientStatus.INTERESTED,
         source: 'Рекомендація',
         managerId: managers[0].id,
+        creatorId: managers[0].id,
+        creatorName: managers[0].name,
       },
       {
         type: ClientType.PERSON,
@@ -185,6 +191,8 @@ async function main() {
         status: ClientStatus.NEW,
         source: 'Сайт',
         managerId: managers[2].id,
+        creatorId: managers[2].id,
+        creatorName: managers[2].name,
       },
       {
         type: ClientType.COMPANY,
@@ -197,6 +205,8 @@ async function main() {
         status: ClientStatus.WAITING,
         source: 'LinkedIn',
         managerId: managers[2].id,
+        creatorId: managers[2].id,
+        creatorName: managers[2].name,
       },
       {
         type: ClientType.COMPANY,
@@ -209,6 +219,8 @@ async function main() {
         status: ClientStatus.CLIENT,
         source: 'Партнер',
         managerId: managers[1].id,
+        creatorId: managers[1].id,
+        creatorName: managers[1].name,
       },
     ],
   });

@@ -3,7 +3,11 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { managersApi } from '@/services/managers.api';
 import { getApiError } from '@/services/http';
-import type { CreateManagerPayload, ManagedUser } from '@/types/auth';
+import type {
+  CreateManagerPayload,
+  ManagedUser,
+  UpdateManagerPayload,
+} from '@/types/auth';
 
 interface FormRef {
   validate: () => Promise<{ valid: boolean }>;
@@ -16,6 +20,7 @@ const router = useRouter();
 const loading = ref(false);
 const saving = ref(false);
 const createDialog = ref(false);
+const editDialog = ref(false);
 const statusDialog = ref(false);
 const passwordDialog = ref(false);
 const deleteDialog = ref(false);
@@ -23,6 +28,7 @@ const selectedManager = ref<ManagedUser | null>(null);
 const newPassword = ref('');
 const showPassword = ref(false);
 const formRef = ref<FormRef | null>(null);
+const editFormRef = ref<FormRef | null>(null);
 const passwordFormRef = ref<FormRef | null>(null);
 const snackbar = ref(false);
 const snackbarMessage = ref('');
@@ -34,18 +40,32 @@ const createForm = reactive<CreateManagerPayload>({
   password: '',
 });
 
+const editForm = reactive<Required<Pick<UpdateManagerPayload, 'name' | 'email'>>>({
+  name: '',
+  email: '',
+});
+
 const headers = [
   { title: 'Менеджер', key: 'name', minWidth: 220 },
   { title: 'Email', key: 'email', minWidth: 220 },
   { title: 'Статус', key: 'isActive', width: 150 },
   { title: 'Останній вхід', key: 'lastLoginAt', minWidth: 170 },
   { title: 'Створено', key: 'createdAt', minWidth: 150 },
-  { title: '', key: 'actions', sortable: false, width: 130 },
+  { title: '', key: 'actions', sortable: false, width: 165 },
 ] as const;
 
 const activeCount = computed(
   () => managers.value.filter((manager) => manager.isActive).length,
 );
+
+const editHasChanges = computed(() => {
+  if (!selectedManager.value) return false;
+  return (
+    editForm.name.trim() !== selectedManager.value.name ||
+    editForm.email.trim().toLowerCase() !==
+      selectedManager.value.email.toLowerCase()
+  );
+});
 
 const required = (value: string) =>
   Boolean(value?.trim()) || "Обов'язкове поле";
@@ -106,6 +126,39 @@ async function createManager() {
     );
     createDialog.value = false;
     notify(`Менеджера ${manager.name} створено`);
+  } catch (error) {
+    notify(getApiError(error), 'error');
+  } finally {
+    saving.value = false;
+  }
+}
+
+function openEdit(manager: ManagedUser) {
+  selectedManager.value = manager;
+  editForm.name = manager.name;
+  editForm.email = manager.email;
+  editDialog.value = true;
+  editFormRef.value?.resetValidation();
+}
+
+async function updateManager() {
+  const result = await editFormRef.value?.validate();
+  if (!result?.valid || !selectedManager.value || !editHasChanges.value) return;
+
+  saving.value = true;
+  try {
+    const updated = await managersApi.update(selectedManager.value.id, {
+      name: editForm.name.trim(),
+      email: editForm.email.trim().toLowerCase(),
+    });
+    const index = managers.value.findIndex((manager) => manager.id === updated.id);
+    if (index >= 0) managers.value[index] = updated;
+    managers.value.sort((left, right) =>
+      left.name.localeCompare(right.name, 'uk'),
+    );
+    editDialog.value = false;
+    selectedManager.value = null;
+    notify('Дані менеджера оновлено');
   } catch (error) {
     notify(getApiError(error), 'error');
   } finally {
@@ -309,6 +362,14 @@ onMounted(async () => {
         <template #item.actions="{ item }">
           <div class="row-actions">
             <v-btn
+              icon="mdi-account-edit-outline"
+              variant="text"
+              size="small"
+              color="primary"
+              aria-label="Редагувати менеджера"
+              @click="openEdit(item)"
+            />
+            <v-btn
               icon="mdi-lock-reset"
               variant="text"
               size="small"
@@ -335,6 +396,66 @@ onMounted(async () => {
         </template>
       </v-data-table>
     </v-card>
+
+    <v-dialog v-model="editDialog" max-width="570" persistent>
+      <v-card>
+        <v-card-title class="dialog-heading">
+          <div class="dialog-icon">
+            <v-icon icon="mdi-account-edit-outline" />
+          </div>
+          <div>
+            <div class="dialog-title">Редагувати менеджера</div>
+            <div class="dialog-subtitle">
+              Змініть ім’я або адресу для входу
+            </div>
+          </div>
+          <v-spacer />
+          <v-btn
+            icon="mdi-close"
+            variant="text"
+            :disabled="saving"
+            @click="editDialog = false"
+          />
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-6">
+          <v-form ref="editFormRef" @submit.prevent="updateManager">
+            <v-text-field
+              v-model="editForm.name"
+              label="Ім'я та прізвище"
+              prepend-inner-icon="mdi-account-outline"
+              :rules="[required]"
+              maxlength="191"
+              class="mb-3"
+            />
+            <v-text-field
+              v-model="editForm.email"
+              label="Email для входу"
+              type="email"
+              prepend-inner-icon="mdi-email-outline"
+              :rules="[required, emailRule]"
+              maxlength="191"
+              hint="Після збереження менеджер входитиме з новою email-адресою"
+              persistent-hint
+            />
+          </v-form>
+        </v-card-text>
+        <v-card-actions class="dialog-actions">
+          <v-btn variant="text" :disabled="saving" @click="editDialog = false">
+            Скасувати
+          </v-btn>
+          <v-btn
+            color="primary"
+            prepend-icon="mdi-content-save-outline"
+            :loading="saving"
+            :disabled="!editHasChanges"
+            @click="updateManager"
+          >
+            Зберегти зміни
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <v-dialog v-model="createDialog" max-width="570" persistent>
       <v-card>

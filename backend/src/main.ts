@@ -27,6 +27,8 @@ async function bootstrap() {
     .addBearerAuth()
     .addTag('auth', 'Авторизація та поточна сесія')
     .addTag('clients', 'Керування клієнтами')
+    .addTag('tasks', 'Глобальне керування завданнями')
+    .addTag('analytics', 'Зведена аналітика CRM')
     .addTag('managers', 'Довідник менеджерів')
     .build();
 

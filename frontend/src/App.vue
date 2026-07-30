@@ -20,16 +20,16 @@ const navigation = computed(() => [
   { title: "Огляд", icon: "mdi-view-dashboard-outline", to: "/overview" },
   { title: "Клієнти", icon: "mdi-account-group-outline", to: "/clients" },
   { title: "Угоди", icon: "mdi-handshake-outline", to: "/deals" },
+  {
+    title: "Завдання",
+    icon: "mdi-checkbox-marked-circle-outline",
+    to: "/tasks",
+  },
+  { title: "Аналітика", icon: "mdi-chart-box-outline", to: "/analytics" },
   ...(auth.isAdmin
     ? [{ title: "Менеджери", icon: "mdi-account-tie-outline", to: "/team" }]
     : []),
   { title: "Мій акаунт", icon: "mdi-account-circle-outline", to: "/account" },
-  {
-    title: "Завдання",
-    icon: "mdi-checkbox-marked-circle-outline",
-    disabled: true,
-  },
-  { title: "Аналітика", icon: "mdi-chart-box-outline", disabled: true },
 ]);
 
 const initials = computed(() =>
@@ -112,7 +112,6 @@ watch(
             v-for="item in navigation"
             :key="item.title"
             :to="item.to"
-            :disabled="item.disabled"
             :prepend-icon="item.icon"
             :title="item.title"
             rounded="lg"
@@ -243,7 +242,6 @@ watch(
             v-for="item in navigation"
             :key="item.title"
             :to="item.to"
-            :disabled="item.disabled"
             :prepend-icon="item.icon"
             :title="item.title"
             rounded="lg"

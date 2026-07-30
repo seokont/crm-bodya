@@ -2,8 +2,11 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import ClientDealDialog from '@/components/clients/ClientDealDialog.vue';
+import ClientCommentsPanel from '@/components/clients/ClientCommentsPanel.vue';
+import ClientDocumentsPanel from '@/components/clients/ClientDocumentsPanel.vue';
 import ClientEditDialog from '@/components/clients/ClientEditDialog.vue';
 import ClientStatusChip from '@/components/clients/ClientStatusChip.vue';
+import ClientTasksPanel from '@/components/clients/ClientTasksPanel.vue';
 import { clientsApi } from '@/services/clients.api';
 import { getApiError } from '@/services/http';
 import { useAuthStore } from '@/stores/auth';
@@ -49,6 +52,12 @@ const deleteDealDialog = ref(false);
 const dealToDelete = ref<ClientDeal | null>(null);
 const clientId = computed(() => Number(route.params.id));
 const client = computed(() => store.selectedClient);
+const creatorDisplayName = computed(
+  () =>
+    client.value?.creator?.name ||
+    client.value?.creatorName ||
+    'Автор не зафіксований',
+);
 
 const currentLocalDateTime = () => {
   const now = new Date();
@@ -578,6 +587,7 @@ onMounted(async () => {
           <v-card class="section-card activity-card">
             <v-tabs v-model="activeTab" color="primary" class="activity-tabs">
               <v-tab value="overview">Активність</v-tab>
+              <v-tab value="comments">Коментарі</v-tab>
               <v-tab value="tasks">Завдання</v-tab>
               <v-tab value="deals">Угоди</v-tab>
               <v-tab value="documents">Документи</v-tab>
@@ -782,6 +792,9 @@ onMounted(async () => {
                   </div>
                 </div>
               </v-window-item>
+              <v-window-item value="comments">
+                <ClientCommentsPanel :client-id="client.id" />
+              </v-window-item>
               <v-window-item value="deals">
                 <div class="deals-panel">
                   <div class="deals-toolbar">
@@ -963,16 +976,20 @@ onMounted(async () => {
                   </div>
                 </div>
               </v-window-item>
-              <v-window-item
-                v-for="tab in ['tasks', 'documents']"
-                :key="tab"
-                :value="tab"
-              >
-                <div class="activity-empty compact">
-                  <v-icon icon="mdi-puzzle-outline" size="32" color="#8ca09b" />
-                  <h3>Розділ готовий до підключення</h3>
-                  <p>Архітектура картки дозволяє додати цей модуль без перероблення сторінки.</p>
-                </div>
+              <v-window-item value="documents">
+                <ClientDocumentsPanel
+                  :client-id="client.id"
+                  :client-manager-id="client.managerId"
+                  @changed="fetchActivities"
+                />
+              </v-window-item>
+              <v-window-item value="tasks">
+                <ClientTasksPanel
+                  :client-id="client.id"
+                  :client-manager-id="client.managerId"
+                  :managers="store.managers"
+                  @changed="fetchActivities"
+                />
               </v-window-item>
             </v-window>
           </v-card>
@@ -993,6 +1010,44 @@ onMounted(async () => {
             <div v-else class="unassigned-manager">
               <v-icon icon="mdi-account-question-outline" />
               Менеджера не призначено
+            </div>
+          </v-card>
+
+          <v-card class="section-card manager-card creator-card">
+            <div class="aside-label">Створив клієнта</div>
+            <div
+              v-if="client.creator || client.creatorName"
+              class="manager-profile"
+            >
+              <v-avatar color="#e8f2ee" size="46" class="creator-avatar">
+                {{
+                  creatorDisplayName
+                    .split(' ')
+                    .map((part) => part[0])
+                    .join('')
+                    .slice(0, 2)
+                }}
+              </v-avatar>
+              <div>
+                <strong>{{ creatorDisplayName }}</strong>
+                <a
+                  v-if="client.creator?.email"
+                  :href="`mailto:${client.creator.email}`"
+                >
+                  {{ client.creator.email }}
+                </a>
+                <small class="creator-role">
+                  {{
+                    client.creator?.role === 'ADMIN'
+                      ? 'Адміністратор'
+                      : 'Менеджер-автор'
+                  }}
+                </small>
+              </div>
+            </div>
+            <div v-else class="unassigned-manager">
+              <v-icon icon="mdi-account-clock-outline" />
+              Автор не зафіксований
             </div>
           </v-card>
 
@@ -1881,6 +1936,22 @@ onMounted(async () => {
   color: #89949d;
   font-size: 10px;
   text-decoration: none;
+}
+
+.creator-avatar {
+  color: #26736a !important;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.creator-role {
+  display: block;
+  margin-top: 4px;
+  color: #8f9aa1;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .unassigned-manager {
