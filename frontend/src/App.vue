@@ -64,7 +64,12 @@ function toggleLargeText() {
 
 function openTeamChat() {
   mobileMenu.value = false;
-  void router.push("/chat");
+  const target = teamChat.firstUnreadTarget;
+  void router.push(
+    target?.partnerId
+      ? { path: "/chat", query: { partner: String(target.partnerId) } }
+      : "/chat",
+  );
 }
 
 async function downloadBackup() {
@@ -103,13 +108,6 @@ watch(
   { immediate: true },
 );
 
-watch(
-  () => route.path,
-  (path) => {
-    if (path === "/chat") teamChat.markRead();
-  },
-  { immediate: true },
-);
 </script>
 
 <template>

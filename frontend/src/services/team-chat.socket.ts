@@ -11,12 +11,18 @@ interface ServerToClientEvents {
   'team-chat:error': (payload: { message: string }) => void;
   'team-chat:message-created': (message: TeamChatMessage) => void;
   'team-chat:message-updated': (message: TeamChatMessage) => void;
-  'team-chat:message-deleted': (payload: { id: number }) => void;
+  'team-chat:message-deleted': (payload: TeamChatDeletedMessage) => void;
+}
+
+export interface TeamChatDeletedMessage {
+  id: number;
+  authorId: number | null;
+  recipientId: number | null;
 }
 
 interface ClientToServerEvents {
   'team-chat:send': (
-    payload: { content: string },
+    payload: { content: string; recipientId?: number },
     callback: (result: TeamChatSocketResult<TeamChatMessage>) => void,
   ) => void;
   'team-chat:update': (
@@ -25,7 +31,7 @@ interface ClientToServerEvents {
   ) => void;
   'team-chat:delete': (
     payload: { id: number },
-    callback: (result: TeamChatSocketResult<{ id: number }>) => void,
+    callback: (result: TeamChatSocketResult<TeamChatDeletedMessage>) => void,
   ) => void;
 }
 

@@ -111,6 +111,7 @@ const teamMessageColumns = [
   'content',
   'authorId',
   'authorName',
+  'recipientId',
   'createdAt',
   'updatedAt',
 ];

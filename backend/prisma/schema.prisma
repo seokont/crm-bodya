@@ -21,7 +21,8 @@ model User {
   deals       ClientDeal[]
   documents   ClientDocument[]
   comments    ClientComment[]
-  teamMessages TeamMessage[]
+  sentTeamMessages TeamMessage[] @relation("TeamMessageAuthor")
+  receivedTeamMessages TeamMessage[] @relation("TeamMessageRecipient")
   createdTasks ClientTask[]     @relation("TaskCreator")
   assignedTasks ClientTask[]    @relation("TaskAssignee")
   createdAt   DateTime  @default(now())
@@ -36,12 +37,16 @@ model TeamMessage {
   id         Int      @id @default(autoincrement())
   content    String   @db.Text
   authorId   Int?
-  author     User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  author     User?    @relation("TeamMessageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
   authorName String
+  recipientId Int?
+  recipient   User?    @relation("TeamMessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   @@index([authorId])
+  @@index([recipientId])
+  @@index([authorId, recipientId, createdAt])
   @@index([createdAt])
 }
 

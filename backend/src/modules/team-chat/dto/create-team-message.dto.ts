@@ -1,7 +1,25 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, MaxLength, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
 
 export class CreateTeamMessageDto {
+  @ApiPropertyOptional({
+    description:
+      'Адресат приватного повідомлення; без значення повідомлення є загальним',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipientId?: number;
+
   @ApiProperty({
     description: 'Текст повідомлення для команди',
     minLength: 1,

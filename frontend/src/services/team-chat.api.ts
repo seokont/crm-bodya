@@ -1,4 +1,5 @@
 import type {
+  TeamChatConversationsResponse,
   TeamChatMember,
   TeamChatMessage,
   TeamChatMessagesResponse,
@@ -10,6 +11,7 @@ export const teamChatApi = {
     afterId?: number;
     beforeId?: number;
     limit?: number;
+    partnerId?: number;
   }): Promise<TeamChatMessagesResponse> {
     const { data } = await http.get<TeamChatMessagesResponse>(
       '/team-chat/messages',
@@ -23,9 +25,20 @@ export const teamChatApi = {
     return data;
   },
 
-  async createMessage(content: string): Promise<TeamChatMessage> {
+  async getConversations(): Promise<TeamChatConversationsResponse> {
+    const { data } = await http.get<TeamChatConversationsResponse>(
+      '/team-chat/conversations',
+    );
+    return data;
+  },
+
+  async createMessage(
+    content: string,
+    recipientId?: number,
+  ): Promise<TeamChatMessage> {
     const { data } = await http.post<TeamChatMessage>('/team-chat/messages', {
       content,
+      recipientId,
     });
     return data;
   },

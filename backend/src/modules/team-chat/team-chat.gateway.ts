@@ -25,12 +25,16 @@ interface ServerToClientEvents {
   'team-chat:error': (payload: { message: string }) => void;
   'team-chat:message-created': (message: TeamMessageResult) => void;
   'team-chat:message-updated': (message: TeamMessageResult) => void;
-  'team-chat:message-deleted': (payload: { id: number }) => void;
+  'team-chat:message-deleted': (payload: {
+    id: number;
+    authorId: number | null;
+    recipientId: number | null;
+  }) => void;
 }
 
 interface ClientToServerEvents {
   'team-chat:send': (
-    payload: { content: string },
+    payload: { content: string; recipientId?: number | null },
     callback: (result: SocketResult<TeamMessageResult>) => void,
   ) => void;
   'team-chat:update': (
@@ -39,8 +43,14 @@ interface ClientToServerEvents {
   ) => void;
   'team-chat:delete': (
     payload: { id: number },
-    callback: (result: SocketResult<{ id: number }>) => void,
+    callback: (result: SocketResult<DeletedMessageResult>) => void,
   ) => void;
+}
+
+interface DeletedMessageResult {
+  id: number;
+  authorId: number | null;
+  recipientId: number | null;
 }
 
 interface ChatSocketData {
@@ -96,7 +106,7 @@ export class TeamChatGateway implements OnGatewayConnection {
       if (!user?.isActive) throw new Error('Обліковий запис неактивний');
 
       client.data.user = user;
-      await client.join('team');
+      await client.join(['team', this.userRoom(user.id)]);
       client.emit('team-chat:ready', { userId: user.id });
     } catch (error) {
       client.emit('team-chat:error', {
@@ -110,11 +120,16 @@ export class TeamChatGateway implements OnGatewayConnection {
   @SubscribeMessage('team-chat:send')
   sendMessage(
     @ConnectedSocket() client: ChatSocket,
-    @MessageBody() payload: { content?: string },
+    @MessageBody() payload: { content?: string; recipientId?: number | null },
   ): Promise<SocketResult<TeamMessageResult>> {
     return this.execute(client, async (user) => {
       const message = await this.teamChatService.create(
-        { content: payload?.content || '' },
+        {
+          content: payload?.content || '',
+          ...(payload?.recipientId
+            ? { recipientId: payload.recipientId }
+            : {}),
+        },
         user,
       );
       this.broadcastCreated(message);
@@ -145,28 +160,48 @@ export class TeamChatGateway implements OnGatewayConnection {
   deleteMessage(
     @ConnectedSocket() client: ChatSocket,
     @MessageBody() payload: { id?: number },
-  ): Promise<SocketResult<{ id: number }>> {
+  ): Promise<SocketResult<DeletedMessageResult>> {
     return this.execute(client, async (user) => {
       if (!Number.isInteger(payload?.id)) {
         throw new Error('Некоректний ID повідомлення');
       }
       const id = payload.id as number;
-      await this.teamChatService.remove(id, user);
-      this.broadcastDeleted(id);
-      return { id };
+      const result = await this.teamChatService.remove(id, user);
+      this.broadcastDeleted(result);
+      return result;
     });
   }
 
   broadcastCreated(message: TeamMessageResult) {
-    this.server.to('team').emit('team-chat:message-created', message);
+    this.messageRooms(message)
+      .emit('team-chat:message-created', message);
   }
 
   broadcastUpdated(message: TeamMessageResult) {
-    this.server.to('team').emit('team-chat:message-updated', message);
+    this.messageRooms(message)
+      .emit('team-chat:message-updated', message);
   }
 
-  broadcastDeleted(id: number) {
-    this.server.to('team').emit('team-chat:message-deleted', { id });
+  broadcastDeleted(payload: DeletedMessageResult) {
+    this.messageRooms(payload)
+      .emit('team-chat:message-deleted', payload);
+  }
+
+  private messageRooms(message: {
+    authorId: number | null;
+    recipientId: number | null;
+  }) {
+    if (!message.recipientId) return this.server.to('team');
+
+    let target = this.server.to(this.userRoom(message.recipientId));
+    if (message.authorId && message.authorId !== message.recipientId) {
+      target = target.to(this.userRoom(message.authorId));
+    }
+    return target;
+  }
+
+  private userRoom(userId: number) {
+    return `user:${userId}`;
   }
 
   private extractToken(client: ChatSocket) {

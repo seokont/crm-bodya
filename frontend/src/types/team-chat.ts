@@ -11,8 +11,10 @@ export interface TeamChatMessage {
   id: number;
   content: string;
   authorId: number | null;
+  recipientId: number | null;
   authorName: string;
   author: TeamChatAuthor | null;
+  recipient: TeamChatAuthor | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -28,4 +30,14 @@ export interface TeamChatMember {
   email: string;
   role: UserRole;
   lastLoginAt: string | null;
+}
+
+export interface TeamChatPrivateConversation {
+  partner: TeamChatMember;
+  latestMessage: TeamChatMessage | null;
+}
+
+export interface TeamChatConversationsResponse {
+  general: TeamChatMessage | null;
+  private: TeamChatPrivateConversation[];
 }

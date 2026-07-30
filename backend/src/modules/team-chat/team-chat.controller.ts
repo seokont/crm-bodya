@@ -34,14 +34,23 @@ export class TeamChatController {
 
   @Get('messages')
   @ApiOperation({ summary: 'Отримати повідомлення командного чату' })
-  findMessages(@Query() query: ChatMessagesQueryDto) {
-    return this.teamChatService.findMessages(query);
+  findMessages(
+    @Query() query: ChatMessagesQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.teamChatService.findMessages(query, user);
   }
 
   @Get('members')
   @ApiOperation({ summary: 'Отримати учасників командного чату' })
   findMembers() {
     return this.teamChatService.findMembers();
+  }
+
+  @Get('conversations')
+  @ApiOperation({ summary: 'Отримати останні повідомлення діалогів' })
+  findConversations(@CurrentUser() user: AuthUser) {
+    return this.teamChatService.findConversations(user);
   }
 
   @Post('messages')
@@ -75,7 +84,7 @@ export class TeamChatController {
     @CurrentUser() user: AuthUser,
   ) {
     const result = await this.teamChatService.remove(id, user);
-    this.teamChatGateway.broadcastDeleted(id);
+    this.teamChatGateway.broadcastDeleted(result);
     return result;
   }
 }

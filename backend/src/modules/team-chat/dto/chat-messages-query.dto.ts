@@ -4,6 +4,16 @@ import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class ChatMessagesQueryDto {
   @ApiPropertyOptional({
+    description:
+      'ID співрозмовника для приватного діалогу; без параметра — загальний чат',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  partnerId?: number;
+
+  @ApiPropertyOptional({
     description: 'Отримати повідомлення з ID, більшим за вказаний',
   })
   @IsOptional()

@@ -1,88 +1,212 @@
-import { ref, shallowRef } from 'vue';
+import { computed, ref, shallowRef } from 'vue';
 import { defineStore } from 'pinia';
 import { teamChatApi } from '@/services/team-chat.api';
 import {
   createTeamChatSocket,
+  type TeamChatDeletedMessage,
   type TeamChatSocket,
   type TeamChatSocketResult,
 } from '@/services/team-chat.socket';
 import type { TeamChatMessage } from '@/types/team-chat';
 
 const LAST_READ_PREFIX = 'bodya_team_chat_last_read_';
+const GENERAL_KEY = 'general';
+
+type ReadMap = Record<string, number>;
+type UnreadMap = Record<string, boolean>;
 
 export const useTeamChatStore = defineStore('team-chat', () => {
   const connected = ref(false);
   const connecting = ref(false);
-  const unreadCount = ref(0);
+  const connectionSequence = ref(0);
   const socketError = ref('');
-  const latestMessageId = ref(0);
+  const unreadByConversation = ref<UnreadMap>({});
+  const latestByConversation = ref<ReadMap>({});
+  const activeConversationKey = ref<string | null>(null);
   const lastCreated = shallowRef<TeamChatMessage | null>(null);
   const lastUpdated = shallowRef<TeamChatMessage | null>(null);
-  const lastDeletedId = ref<number | null>(null);
+  const lastDeleted = shallowRef<TeamChatDeletedMessage | null>(null);
 
   let socket: TeamChatSocket | null = null;
   let activeUserId: number | null = null;
-  let lastReadId = 0;
+  let readByConversation: ReadMap = {};
+
+  const unreadCount = computed(
+    () =>
+      Object.values(unreadByConversation.value).filter(Boolean).length,
+  );
+
+  const firstUnreadTarget = computed(() => {
+    const key = Object.keys(unreadByConversation.value).find(
+      (item) => unreadByConversation.value[item],
+    );
+    if (!key) return null;
+    return {
+      partnerId: key === GENERAL_KEY ? null : Number(key.replace('private:', '')),
+    };
+  });
+
+  function conversationKey(partnerId: number | null) {
+    return partnerId === null ? GENERAL_KEY : `private:${partnerId}`;
+  }
+
+  function partnerIdForMessage(message: {
+    authorId: number | null;
+    recipientId: number | null;
+  }) {
+    if (message.recipientId === null) return null;
+    return message.authorId === activeUserId
+      ? message.recipientId
+      : message.authorId;
+  }
+
+  function messageConversationKey(message: {
+    authorId: number | null;
+    recipientId: number | null;
+  }) {
+    return conversationKey(partnerIdForMessage(message));
+  }
 
   function storageKey(userId: number) {
     return `${LAST_READ_PREFIX}${userId}`;
   }
 
-  function persistLastRead() {
+  function persistReadMap() {
     if (!activeUserId) return;
-    localStorage.setItem(storageKey(activeUserId), String(lastReadId));
+    localStorage.setItem(
+      storageKey(activeUserId),
+      JSON.stringify(readByConversation),
+    );
   }
 
-  function isChatVisible() {
+  function readStoredMap(userId: number) {
+    const raw = localStorage.getItem(storageKey(userId));
+    if (!raw) return { exists: false, value: {} as ReadMap };
+
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed)
+      ) {
+        return { exists: true, value: parsed as ReadMap };
+      }
+    } catch {
+      const legacyGeneralId = Number(raw);
+      if (Number.isInteger(legacyGeneralId) && legacyGeneralId > 0) {
+        return {
+          exists: true,
+          value: { [GENERAL_KEY]: legacyGeneralId },
+        };
+      }
+    }
+
+    return { exists: true, value: {} as ReadMap };
+  }
+
+  function isConversationVisible(key: string) {
     return (
+      activeConversationKey.value === key &&
       window.location.pathname === '/chat' &&
       !document.hidden &&
       document.hasFocus()
     );
   }
 
+  function markConversationRead(
+    partnerId: number | null,
+    messageId = latestByConversation.value[conversationKey(partnerId)] || 0,
+  ) {
+    const key = conversationKey(partnerId);
+    readByConversation[key] = Math.max(
+      readByConversation[key] || 0,
+      messageId,
+    );
+    unreadByConversation.value = {
+      ...unreadByConversation.value,
+      [key]: false,
+    };
+    persistReadMap();
+  }
+
+  function setActiveConversation(partnerId: number | null) {
+    activeConversationKey.value = conversationKey(partnerId);
+    markConversationRead(partnerId);
+  }
+
+  function clearActiveConversation() {
+    activeConversationKey.value = null;
+  }
+
+  function isConversationUnread(partnerId: number | null) {
+    return Boolean(
+      unreadByConversation.value[conversationKey(partnerId)],
+    );
+  }
+
   function handleCreated(message: TeamChatMessage) {
-    latestMessageId.value = Math.max(latestMessageId.value, message.id);
+    const partnerId = partnerIdForMessage(message);
+    const key = conversationKey(partnerId);
+    latestByConversation.value = {
+      ...latestByConversation.value,
+      [key]: Math.max(latestByConversation.value[key] || 0, message.id),
+    };
     lastCreated.value = message;
 
-    if (message.authorId === activeUserId || isChatVisible()) {
-      markRead(message.id);
+    if (message.authorId === activeUserId || isConversationVisible(key)) {
+      markConversationRead(partnerId, message.id);
       return;
     }
 
-    if (message.id > lastReadId) unreadCount.value += 1;
+    if (message.id > (readByConversation[key] || 0)) {
+      unreadByConversation.value = {
+        ...unreadByConversation.value,
+        [key]: true,
+      };
+    }
   }
 
   async function primeUnread() {
     if (!activeUserId) return;
 
-    const stored = Number(localStorage.getItem(storageKey(activeUserId)));
-    lastReadId = Number.isInteger(stored) && stored > 0 ? stored : 0;
+    const stored = readStoredMap(activeUserId);
+    readByConversation = stored.value;
 
     try {
-      if (!lastReadId) {
-        const response = await teamChatApi.getMessages({ limit: 1 });
-        const latest = response.items[response.items.length - 1];
-        latestMessageId.value = latest?.id || 0;
-        lastReadId = latestMessageId.value;
-        unreadCount.value = 0;
-        persistLastRead();
-        return;
+      const conversations = await teamChatApi.getConversations();
+      const newest = [
+        { partnerId: null, message: conversations.general },
+        ...conversations.private.map((conversation) => ({
+          partnerId: conversation.partner.id,
+          message: conversation.latestMessage,
+        })),
+      ];
+      const latest: ReadMap = {};
+      const unread: UnreadMap = {};
+
+      for (const conversation of newest) {
+        const key = conversationKey(conversation.partnerId);
+        const message = conversation.message;
+        latest[key] = message?.id || 0;
+
+        if (!stored.exists) {
+          readByConversation[key] = message?.id || 0;
+          unread[key] = false;
+        } else {
+          unread[key] = Boolean(
+            message &&
+              message.authorId !== activeUserId &&
+              message.id > (readByConversation[key] || 0),
+          );
+        }
       }
 
-      const response = await teamChatApi.getMessages({
-        afterId: lastReadId,
-        limit: 100,
-      });
-      latestMessageId.value = Math.max(
-        lastReadId,
-        ...response.items.map((message) => message.id),
-      );
-      unreadCount.value = response.items.filter(
-        (message) => message.authorId !== activeUserId,
-      ).length;
+      latestByConversation.value = latest;
+      unreadByConversation.value = unread;
+      if (!stored.exists) persistReadMap();
     } catch {
-      // Socket events continue working even if unread priming fails.
+      // Події Socket.IO продовжать працювати, навіть якщо початковий запит не вдався.
     }
   }
 
@@ -100,9 +224,17 @@ export const useTeamChatStore = defineStore('team-chat', () => {
 
     socket = createTeamChatSocket();
     socket.on('connect', () => {
+      connected.value = false;
+      connecting.value = true;
+      socketError.value = '';
+    });
+    socket.on('team-chat:ready', () => {
       connected.value = true;
       connecting.value = false;
       socketError.value = '';
+      const isReconnect = connectionSequence.value > 0;
+      connectionSequence.value += 1;
+      if (isReconnect) void primeUnread();
     });
     socket.on('disconnect', () => {
       connected.value = false;
@@ -110,7 +242,8 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     socket.on('connect_error', () => {
       connected.value = false;
       connecting.value = false;
-      socketError.value = 'Не вдалося підключитися до командного чату';
+      socketError.value =
+        'Не вдалося підключитися до командного чату';
     });
     socket.on('team-chat:error', ({ message }) => {
       socketError.value = message;
@@ -119,8 +252,9 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     socket.on('team-chat:message-updated', (message) => {
       lastUpdated.value = message;
     });
-    socket.on('team-chat:message-deleted', ({ id }) => {
-      lastDeletedId.value = id;
+    socket.on('team-chat:message-deleted', (payload) => {
+      lastDeleted.value = payload;
+      void primeUnread();
     });
     socket.connect();
   }
@@ -132,25 +266,21 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     activeUserId = null;
     connected.value = false;
     connecting.value = false;
-    unreadCount.value = 0;
+    connectionSequence.value = 0;
     socketError.value = '';
-    latestMessageId.value = 0;
+    unreadByConversation.value = {};
+    latestByConversation.value = {};
+    activeConversationKey.value = null;
     lastCreated.value = null;
     lastUpdated.value = null;
-    lastDeletedId.value = null;
-    lastReadId = 0;
+    lastDeleted.value = null;
+    readByConversation = {};
   }
 
-  function markRead(messageId = latestMessageId.value) {
-    lastReadId = Math.max(lastReadId, messageId);
-    unreadCount.value = 0;
-    persistLastRead();
-  }
-
-  async function sendMessage(content: string) {
+  async function sendMessage(content: string, recipientId?: number) {
     const result = await requireSocket()
       .timeout(10_000)
-      .emitWithAck('team-chat:send', { content });
+      .emitWithAck('team-chat:send', { content, recipientId });
     return unwrapResult<TeamChatMessage>(
       result as TeamChatSocketResult<TeamChatMessage>,
     );
@@ -169,8 +299,8 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     const result = await requireSocket()
       .timeout(10_000)
       .emitWithAck('team-chat:delete', { id });
-    return unwrapResult<{ id: number }>(
-      result as TeamChatSocketResult<{ id: number }>,
+    return unwrapResult<TeamChatDeletedMessage>(
+      result as TeamChatSocketResult<TeamChatDeletedMessage>,
     );
   }
 
@@ -191,15 +321,21 @@ export const useTeamChatStore = defineStore('team-chat', () => {
   return {
     connected,
     connecting,
-    unreadCount,
+    connectionSequence,
     socketError,
-    latestMessageId,
+    unreadCount,
+    unreadByConversation,
+    firstUnreadTarget,
     lastCreated,
     lastUpdated,
-    lastDeletedId,
+    lastDeleted,
     connect,
     disconnect,
-    markRead,
+    setActiveConversation,
+    clearActiveConversation,
+    markConversationRead,
+    isConversationUnread,
+    messageConversationKey,
     sendMessage,
     updateMessage,
     deleteMessage,

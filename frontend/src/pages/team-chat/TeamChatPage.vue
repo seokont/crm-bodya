@@ -7,6 +7,7 @@ import {
   ref,
   watch,
 } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { teamChatApi } from '@/services/team-chat.api';
 import { getApiError } from '@/services/http';
 import { useAuthStore } from '@/stores/auth';
@@ -18,10 +19,16 @@ import type {
 
 const auth = useAuthStore();
 const chat = useTeamChatStore();
+const route = useRoute();
+const router = useRouter();
 const messages = ref<TeamChatMessage[]>([]);
 const members = ref<TeamChatMember[]>([]);
+const selectedPartnerId = ref<number | null>(
+  parsePartnerId(route.query.partner),
+);
 const content = ref('');
 const loading = ref(true);
+const membersLoading = ref(true);
 const loadingOlder = ref(false);
 const sending = ref(false);
 const hasMore = ref(false);
@@ -36,11 +43,29 @@ const actionLoading = ref(false);
 const snackbar = ref(false);
 const snackbarMessage = ref('');
 const snackbarColor = ref('primary');
+let pageReady = false;
 
 const currentUserId = computed(() => auth.user?.id);
+const availableMembers = computed(() =>
+  members.value.filter((member) => member.id !== currentUserId.value),
+);
+const selectedPartner = computed(() =>
+  availableMembers.value.find(
+    (member) => member.id === selectedPartnerId.value,
+  ),
+);
+const isPrivateConversation = computed(
+  () => selectedPartnerId.value !== null,
+);
 const managerCount = computed(
   () => members.value.filter((member) => member.role === 'MANAGER').length,
 );
+
+function parsePartnerId(value: unknown) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
 
 function notify(message: string, color = 'primary') {
   snackbarMessage.value = message;
@@ -67,7 +92,17 @@ function isMine(message: TeamChatMessage) {
 }
 
 function canManage(message: TeamChatMessage) {
-  return auth.isAdmin || isMine(message);
+  return isMine(message) || (auth.isAdmin && message.recipientId === null);
+}
+
+function belongsToSelectedConversation(message: TeamChatMessage) {
+  if (selectedPartnerId.value === null) return message.recipientId === null;
+  if (message.recipientId === null) return false;
+  const partnerId =
+    message.authorId === currentUserId.value
+      ? message.recipientId
+      : message.authorId;
+  return partnerId === selectedPartnerId.value;
 }
 
 function wasEdited(message: TeamChatMessage) {
@@ -143,24 +178,74 @@ async function scrollToBottom(smooth = false) {
   });
 }
 
-async function fetchInitial() {
+async function fetchMembers() {
+  membersLoading.value = true;
+  try {
+    const response = await teamChatApi.getMembers();
+    members.value = response;
+
+    if (
+      selectedPartnerId.value !== null &&
+      !response.some(
+        (member) =>
+          member.id === selectedPartnerId.value &&
+          member.id !== currentUserId.value,
+      )
+    ) {
+      selectConversation(null, true);
+    }
+  } finally {
+    membersLoading.value = false;
+  }
+}
+
+async function fetchConversation() {
+  const requestedPartnerId = selectedPartnerId.value;
   loading.value = true;
   error.value = '';
+  messages.value = [];
   try {
-    const [messageResponse, memberResponse] = await Promise.all([
-      teamChatApi.getMessages({ limit: 80 }),
-      teamChatApi.getMembers(),
-    ]);
+    const messageResponse = await teamChatApi.getMessages({
+      limit: 80,
+      ...(requestedPartnerId ? { partnerId: requestedPartnerId } : {}),
+    });
+    if (requestedPartnerId !== selectedPartnerId.value) return;
     messages.value = messageResponse.items;
     hasMore.value = messageResponse.hasMore;
-    members.value = memberResponse;
-    chat.markRead(messages.value[messages.value.length - 1]?.id);
+    chat.markConversationRead(
+      requestedPartnerId,
+      messages.value[messages.value.length - 1]?.id,
+    );
     await scrollToBottom();
   } catch (requestError) {
+    if (requestedPartnerId !== selectedPartnerId.value) return;
     error.value = getApiError(requestError);
   } finally {
+    if (requestedPartnerId === selectedPartnerId.value) {
+      loading.value = false;
+    }
+  }
+}
+
+async function fetchInitial() {
+  error.value = '';
+  try {
+    await Promise.all([fetchMembers(), fetchConversation()]);
+  } catch (requestError) {
+    error.value = getApiError(requestError);
     loading.value = false;
   }
+}
+
+function selectConversation(partnerId: number | null, replace = false) {
+  if (selectedPartnerId.value !== partnerId) {
+    selectedPartnerId.value = partnerId;
+  }
+  chat.setActiveConversation(partnerId);
+  const location = partnerId
+    ? { path: '/chat', query: { partner: String(partnerId) } }
+    : { path: '/chat' };
+  void (replace ? router.replace(location) : router.push(location));
 }
 
 async function loadOlder() {
@@ -174,6 +259,9 @@ async function loadOlder() {
     const response = await teamChatApi.getMessages({
       beforeId: firstId,
       limit: 80,
+      ...(selectedPartnerId.value
+        ? { partnerId: selectedPartnerId.value }
+        : {}),
     });
     messages.value = [...response.items, ...messages.value];
     hasMore.value = response.hasMore;
@@ -192,12 +280,15 @@ async function sendMessage() {
 
   sending.value = true;
   try {
-    const message = await chat.sendMessage(value);
+    const message = await chat.sendMessage(
+      value,
+      selectedPartnerId.value || undefined,
+    );
     if (!messages.value.some((item) => item.id === message.id)) {
       messages.value.push(message);
     }
     content.value = '';
-    chat.markRead(message.id);
+    chat.markConversationRead(selectedPartnerId.value, message.id);
     await scrollToBottom(true);
   } catch (requestError) {
     notify(actionError(requestError), 'error');
@@ -264,29 +355,66 @@ async function deleteMessage() {
 
 function handleVisibilityChange() {
   if (!document.hidden) {
-    chat.markRead(messages.value[messages.value.length - 1]?.id);
+    chat.markConversationRead(
+      selectedPartnerId.value,
+      messages.value[messages.value.length - 1]?.id,
+    );
   }
 }
 
 onMounted(async () => {
   if (auth.user) await chat.connect(auth.user.id);
+  chat.setActiveConversation(selectedPartnerId.value);
   await fetchInitial();
+  pageReady = true;
   document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('focus', handleVisibilityChange);
 });
 
 onBeforeUnmount(() => {
+  pageReady = false;
+  chat.clearActiveConversation();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
+  window.removeEventListener('focus', handleVisibilityChange);
 });
+
+watch(
+  () => route.query.partner,
+  (value) => {
+    const partnerId = parsePartnerId(value);
+    if (partnerId !== selectedPartnerId.value) {
+      selectedPartnerId.value = partnerId;
+    }
+  },
+);
+
+watch(selectedPartnerId, async (partnerId) => {
+  chat.setActiveConversation(partnerId);
+  await fetchConversation();
+});
+
+watch(
+  () => chat.connectionSequence,
+  async (sequence, previousSequence) => {
+    if (pageReady && sequence > 1 && sequence !== previousSequence) {
+      await fetchConversation();
+    }
+  },
+);
 
 watch(
   () => chat.lastCreated,
   async (message) => {
-    if (!message || messages.value.some((item) => item.id === message.id)) {
+    if (
+      !message ||
+      !belongsToSelectedConversation(message) ||
+      messages.value.some((item) => item.id === message.id)
+    ) {
       return;
     }
     const stayAtBottom = isNearBottom();
     messages.value.push(message);
-    chat.markRead(message.id);
+    chat.markConversationRead(selectedPartnerId.value, message.id);
     if (stayAtBottom || isMine(message)) await scrollToBottom(true);
   },
 );
@@ -302,10 +430,12 @@ watch(
 );
 
 watch(
-  () => chat.lastDeletedId,
-  (id) => {
-    if (!id) return;
-    messages.value = messages.value.filter((message) => message.id !== id);
+  () => chat.lastDeleted,
+  (deleted) => {
+    if (!deleted) return;
+    messages.value = messages.value.filter(
+      (message) => message.id !== deleted.id,
+    );
   },
 );
 </script>
@@ -357,10 +487,10 @@ watch(
           <v-icon icon="mdi-account-group-outline" size="20" />
         </div>
         <div class="member-summary">
-          {{ managerCount }} менеджерів · 1 спільна кімната
+          {{ managerCount }} менеджерів · загальний і приватні чати
         </div>
 
-        <div v-if="loading" class="members-loading">
+        <div v-if="membersLoading" class="members-loading">
           <v-skeleton-loader
             v-for="index in 4"
             :key="index"
@@ -368,42 +498,94 @@ watch(
           />
         </div>
         <div v-else class="member-list">
-          <div
-            v-for="member in members"
+          <button
+            type="button"
+            class="member-row general-room-row"
+            :class="{
+              'member-row--selected': selectedPartnerId === null,
+            }"
+            @click="selectConversation(null)"
+          >
+            <div class="member-avatar general-room-avatar">
+              <v-icon icon="mdi-account-group-outline" size="19" />
+            </div>
+            <div class="member-copy">
+              <strong>Загальний чат</strong>
+              <span>Повідомлення для всієї команди</span>
+            </div>
+            <i
+              v-if="chat.isConversationUnread(null)"
+              class="conversation-unread-dot"
+              aria-label="Є нові повідомлення"
+            />
+          </button>
+          <button
+            v-for="member in availableMembers"
             :key="member.id"
+            type="button"
             class="member-row"
-            :class="{ 'member-row--current': member.id === currentUserId }"
+            :class="{
+              'member-row--selected': selectedPartnerId === member.id,
+            }"
+            @click="selectConversation(member.id)"
           >
             <div class="member-avatar">
               {{ initials(member.name) }}
-              <i />
             </div>
             <div class="member-copy">
-              <strong>
-                {{ member.name }}
-                <small v-if="member.id === currentUserId">Ви</small>
-              </strong>
+              <strong>{{ member.name }}</strong>
               <span>
                 {{ member.role === 'ADMIN' ? 'Адміністратор' : 'Менеджер' }}
                 · {{ formatLastLogin(member.lastLoginAt) }}
               </span>
             </div>
-          </div>
+            <i
+              v-if="chat.isConversationUnread(member.id)"
+              class="conversation-unread-dot"
+              aria-label="Є нові повідомлення"
+            />
+          </button>
         </div>
       </v-card>
 
       <v-card class="section-card conversation-card">
         <div class="conversation-header">
           <div class="room-mark">
-            <v-icon icon="mdi-pound" size="20" />
+            <v-icon
+              :icon="
+                isPrivateConversation
+                  ? 'mdi-account-lock-outline'
+                  : 'mdi-pound'
+              "
+              size="20"
+            />
           </div>
           <div>
-            <strong>Загальний чат</strong>
-            <span>Повідомлення бачить уся активна команда</span>
+            <strong>
+              {{
+                isPrivateConversation
+                  ? selectedPartner?.name || 'Приватний діалог'
+                  : 'Загальний чат'
+              }}
+            </strong>
+            <span>
+              {{
+                isPrivateConversation
+                  ? 'Приватний діалог · повідомлення бачите лише ви вдвох'
+                  : 'Повідомлення бачить уся активна команда'
+              }}
+            </span>
           </div>
           <div class="conversation-meta">
-            <v-icon icon="mdi-shield-lock-outline" size="15" />
-            Лише співробітники
+            <v-icon
+              :icon="
+                isPrivateConversation
+                  ? 'mdi-lock-outline'
+                  : 'mdi-shield-lock-outline'
+              "
+              size="15"
+            />
+            {{ isPrivateConversation ? 'Особисто' : 'Лише співробітники' }}
           </div>
         </div>
 
@@ -428,12 +610,28 @@ watch(
 
             <div v-if="!messages.length" class="chat-empty">
               <div class="chat-empty__icon">
-                <v-icon icon="mdi-forum-outline" size="30" />
+                <v-icon
+                  :icon="
+                    isPrivateConversation
+                      ? 'mdi-message-lock-outline'
+                      : 'mdi-forum-outline'
+                  "
+                  size="30"
+                />
               </div>
-              <h2>Почніть командну розмову</h2>
+              <h2>
+                {{
+                  isPrivateConversation
+                    ? 'Почніть особисту розмову'
+                    : 'Почніть командну розмову'
+                }}
+              </h2>
               <p>
-                Напишіть перше повідомлення — воно одразу стане доступним усій
-                команді.
+                {{
+                  isPrivateConversation
+                    ? `Повідомлення отримає лише ${selectedPartner?.name || 'обраний співробітник'}.`
+                    : 'Напишіть перше повідомлення — воно одразу стане доступним усій команді.'
+                }}
               </p>
             </div>
 
@@ -507,7 +705,11 @@ watch(
           <div class="composer-body">
             <v-textarea
               v-model="content"
-              placeholder="Напишіть повідомлення команді…"
+              :placeholder="
+                isPrivateConversation
+                  ? `Повідомлення для ${selectedPartner?.name || 'співробітника'}…`
+                  : 'Напишіть повідомлення команді…'
+              "
               variant="outlined"
               rows="2"
               auto-grow
@@ -572,7 +774,7 @@ watch(
       <v-card class="action-dialog">
         <v-card-title>Видалити повідомлення?</v-card-title>
         <v-card-text>
-          Повідомлення буде остаточно видалено з командного чату.
+          Повідомлення буде остаточно видалено з цієї розмови.
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -719,15 +921,55 @@ watch(
 }
 
 .member-row {
+  position: relative;
   display: flex;
+  width: 100%;
   align-items: center;
   gap: 10px;
   padding: 10px 8px;
+  border: 0;
   border-radius: 12px;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
 }
 
-.member-row--current {
+.member-row:hover {
+  background: #f7f9f7;
+}
+
+.member-row--selected {
   background: #f0f6f3;
+}
+
+.member-row--selected:hover {
+  background: #e9f3ef;
+}
+
+.general-room-row {
+  margin-bottom: 8px;
+  border-bottom: 1px solid #edf0ed;
+  border-radius: 12px 12px 5px 5px;
+}
+
+.general-room-avatar {
+  color: #fff;
+  background: #26736a;
+}
+
+.conversation-unread-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #dc4d4d;
+  box-shadow: 0 0 0 3px rgba(220, 77, 77, 0.11);
 }
 
 .member-avatar,
@@ -762,6 +1004,7 @@ watch(
 
 .member-copy {
   min-width: 0;
+  flex: 1;
 }
 
 .member-copy strong,
