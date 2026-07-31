@@ -15,6 +15,7 @@ model User {
   role        UserRole  @default(MANAGER)
   isActive    Boolean   @default(true)
   lastLoginAt DateTime?
+  clientTableColumns Json?
   clients     Client[]          @relation("ClientManager")
   createdClients Client[]       @relation("ClientCreator")
   activities  ClientActivity[]
@@ -174,9 +175,13 @@ model ClientTask {
   id           Int          @id @default(autoincrement())
   title        String
   description  String?      @db.Text
+  kind         TaskKind     @default(GENERAL)
   status       TaskStatus   @default(TODO)
   priority     TaskPriority @default(MEDIUM)
   dueAt        DateTime?
+  remindAt     DateTime?
+  reminderNotifiedAt DateTime?
+  reminderReadAt DateTime?
   completedAt  DateTime?
   clientId     Int
   client       Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -193,6 +198,8 @@ model ClientTask {
   @@index([assigneeId, status])
   @@index([creatorId])
   @@index([dueAt])
+  @@index([kind, status])
+  @@index([assigneeId, reminderReadAt, remindAt])
   @@index([priority])
 }
 
@@ -204,14 +211,14 @@ enum ClientType {
 
 enum ClientStatus {
   NEW
-  IN_PROGRESS
-  CONTACTED
-  WAITING
+  NO_ANSWER
+  CALL_LATER
+  FUTURE_PROSPECT
   INTERESTED
-  NOT_INTERESTED
-  CLIENT
-  REJECTED
-  ARCHIVED
+  SIGNED_CONTRACT
+  PARTIALLY_PAID
+  FULLY_PAID
+  LOST
 }
 
 enum UserRole {
@@ -251,6 +258,11 @@ enum TaskStatus {
   IN_PROGRESS
   DONE
   CANCELLED
+}
+
+enum TaskKind {
+  GENERAL
+  CALL
 }
 
 enum TaskPriority {

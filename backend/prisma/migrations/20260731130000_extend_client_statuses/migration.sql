@@ -1,0 +1,12 @@
+ALTER TABLE `Client`
+  MODIFY `status` ENUM(
+    'NEW',
+    'NO_ANSWER',
+    'CALL_LATER',
+    'FUTURE_PROSPECT',
+    'INTERESTED',
+    'SIGNED_CONTRACT',
+    'PARTIALLY_PAID',
+    'FULLY_PAID',
+    'LOST'
+  ) NOT NULL DEFAULT 'NEW';

@@ -4,10 +4,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuthUser } from '../auth/auth-user.interface';
 
 const inWorkStatuses: ClientStatus[] = [
-  ClientStatus.IN_PROGRESS,
-  ClientStatus.CONTACTED,
-  ClientStatus.WAITING,
+  ClientStatus.NO_ANSWER,
+  ClientStatus.CALL_LATER,
+  ClientStatus.FUTURE_PROSPECT,
   ClientStatus.INTERESTED,
+  ClientStatus.SIGNED_CONTRACT,
+  ClientStatus.PARTIALLY_PAID,
 ];
 
 const recentClientSelect = {

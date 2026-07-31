@@ -29,14 +29,14 @@ const periods: { title: string; value: OverviewPeriod }[] = [
 
 const statusColors: Record<ClientStatus, string> = {
   NEW: '#4b78a8',
-  IN_PROGRESS: '#d87942',
-  CONTACTED: '#8b68a8',
-  WAITING: '#d2a43b',
+  NO_ANSWER: '#b95b5b',
+  CALL_LATER: '#d2a43b',
+  FUTURE_PROSPECT: '#8b68a8',
   INTERESTED: '#3f8d75',
-  NOT_INTERESTED: '#9ba3a8',
-  CLIENT: '#26736a',
-  REJECTED: '#b95b5b',
-  ARCHIVED: '#76828a',
+  SIGNED_CONTRACT: '#26736a',
+  PARTIALLY_PAID: '#3d7196',
+  FULLY_PAID: '#23804b',
+  LOST: '#9ba3a8',
 };
 
 const statusLabels = Object.fromEntries(

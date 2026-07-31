@@ -81,7 +81,17 @@ export class AnalyticsService {
         },
       }),
       this.prisma.client.count({
-        where: { ...clientScope, status: ClientStatus.CLIENT },
+        where: {
+          ...clientScope,
+          status: {
+            in: [
+              ClientStatus.INTERESTED,
+              ClientStatus.SIGNED_CONTRACT,
+              ClientStatus.PARTIALLY_PAID,
+              ClientStatus.FULLY_PAID,
+            ],
+          },
+        },
       }),
       this.prisma.client.groupBy({
         by: ['status'],

@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { TaskPriority, TaskStatus } from '@prisma/client';
+import { TaskKind, TaskPriority, TaskStatus } from '@prisma/client';
 import {
   IsEnum,
   IsInt,
@@ -25,6 +25,11 @@ export class UpdateClientTaskDto {
   @MaxLength(3000)
   description?: string | null;
 
+  @ApiPropertyOptional({ enum: TaskKind })
+  @IsOptional()
+  @IsEnum(TaskKind)
+  kind?: TaskKind;
+
   @ApiPropertyOptional({ enum: TaskStatus })
   @IsOptional()
   @IsEnum(TaskStatus)
@@ -39,6 +44,11 @@ export class UpdateClientTaskDto {
   @IsOptional()
   @IsISO8601()
   dueAt?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsISO8601()
+  remindAt?: string | null;
 
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()

@@ -100,15 +100,15 @@ const globalDealSelect = {
 } satisfies Prisma.ClientDealSelect;
 
 const statusLabels: Record<ClientStatus, string> = {
-  NEW: 'Новий',
-  IN_PROGRESS: 'У роботі',
-  CONTACTED: "Зв'язалися",
-  WAITING: 'Очікує рішення',
+  NEW: 'Новий клієнт',
+  NO_ANSWER: 'Не бере телефон',
+  CALL_LATER: 'Передзвонити пізніше',
+  FUTURE_PROSPECT: 'Дізнавався на перспективу',
   INTERESTED: 'Зацікавлений',
-  NOT_INTERESTED: 'Не зацікавлений',
-  CLIENT: 'Клієнт',
-  REJECTED: 'Відмова',
-  ARCHIVED: 'Архів',
+  SIGNED_CONTRACT: 'Підписав договір',
+  PARTIALLY_PAID: 'Оплатив першу частину',
+  FULLY_PAID: 'Оплатив повністю',
+  LOST: 'Злив',
 };
 
 const dealStageLabels: Record<DealStage, string> = {
@@ -310,14 +310,13 @@ export class ClientsService {
         where: { id },
         data: {
           isArchived: true,
-          status: ClientStatus.ARCHIVED,
         },
         include: clientInclude,
       });
       await transaction.clientActivity.create({
         data: {
-          type: ActivityType.STATUS_CHANGE,
-          content: `Статус змінено: «${statusLabels[current.status]}» → «Архів»`,
+          type: ActivityType.SYSTEM,
+          content: `Клієнта зі статусом «${statusLabels[current.status]}» переміщено до архіву`,
           clientId: id,
           authorId: user.id,
           authorName: user.name,

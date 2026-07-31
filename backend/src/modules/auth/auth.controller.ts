@@ -20,6 +20,7 @@ import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
+import { UpdateClientTablePreferencesDto } from './dto/update-client-table-preferences.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -41,6 +42,23 @@ export class AuthController {
   @ApiOperation({ summary: 'Отримати поточного користувача' })
   profile(@CurrentUser() user: AuthUser) {
     return user;
+  }
+
+  @Get('preferences/client-table')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Отримати персональні колонки таблиці клієнтів' })
+  getClientTablePreferences(@CurrentUser() user: AuthUser) {
+    return this.authService.getClientTablePreferences(user.id);
+  }
+
+  @Patch('preferences/client-table')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Зберегти персональні колонки таблиці клієнтів' })
+  updateClientTablePreferences(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: UpdateClientTablePreferencesDto,
+  ) {
+    return this.authService.updateClientTablePreferences(user.id, dto);
   }
 
   @Patch('password')

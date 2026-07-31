@@ -10,15 +10,31 @@ const statusMap: Record<
   ClientStatus,
   { label: string; color: string; dot: string }
 > = {
-  NEW: { label: 'Новий', color: '#e8f1fa', dot: '#4976a7' },
-  IN_PROGRESS: { label: 'У роботі', color: '#fff0df', dot: '#c56b2c' },
-  CONTACTED: { label: "Зв'язалися", color: '#eee9fb', dot: '#7258a3' },
-  WAITING: { label: 'Очікує рішення', color: '#fff4d7', dot: '#b7811f' },
+  NEW: { label: 'Новий клієнт', color: '#e8f1fa', dot: '#4976a7' },
+  NO_ANSWER: { label: 'НБТ', color: '#fae9e6', dot: '#b95b5b' },
+  CALL_LATER: { label: 'Передзвонити пізніше', color: '#fff4d7', dot: '#b7811f' },
+  FUTURE_PROSPECT: {
+    label: 'Дізнавався на перспективу',
+    color: '#eee9fb',
+    dot: '#7258a3',
+  },
   INTERESTED: { label: 'Зацікавлений', color: '#e6f4ed', dot: '#35805d' },
-  NOT_INTERESTED: { label: 'Не зацікавлений', color: '#eef0f2', dot: '#687582' },
-  CLIENT: { label: 'Клієнт', color: '#dff3ea', dot: '#26736a' },
-  REJECTED: { label: 'Відмова', color: '#fae6e5', dot: '#b94c4b' },
-  ARCHIVED: { label: 'Архів', color: '#eceef0', dot: '#75808a' },
+  SIGNED_CONTRACT: {
+    label: 'Підписав договір',
+    color: '#e4f2ee',
+    dot: '#26736a',
+  },
+  PARTIALLY_PAID: {
+    label: 'Оплатив першу частину',
+    color: '#e6f0f8',
+    dot: '#3d7196',
+  },
+  FULLY_PAID: {
+    label: 'Оплатив повністю',
+    color: '#dff3e7',
+    dot: '#23804b',
+  },
+  LOST: { label: 'Злив', color: '#eef0f2', dot: '#687582' },
 };
 
 const config = computed(() => statusMap[props.status]);

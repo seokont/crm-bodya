@@ -9,6 +9,7 @@ import { DocumentsService } from './documents.service';
 import { TasksController } from './tasks.controller';
 import { TasksService } from './tasks.service';
 import { GlobalTasksController } from './global-tasks.controller';
+import { CallRemindersController } from './call-reminders.controller';
 
 @Module({
   controllers: [
@@ -18,6 +19,7 @@ import { GlobalTasksController } from './global-tasks.controller';
     CommentsController,
     TasksController,
     GlobalTasksController,
+    CallRemindersController,
   ],
   providers: [ClientsService, DocumentsService, CommentsService, TasksService],
   exports: [ClientsService],

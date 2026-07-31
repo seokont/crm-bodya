@@ -236,9 +236,9 @@ onMounted(fetchAnalytics);
           <div class="metric-card__icon metric-card__icon--orange">
             <v-icon icon="mdi-target-account" />
           </div>
-          <span>Конверсія у клієнта</span>
+          <span>Частка зацікавлених</span>
           <strong>{{ analytics.metrics.conversionRate }}%</strong>
-          <small>Частка клієнтів зі статусом «Клієнт»</small>
+          <small>Статус «Зацікавлений» або наступний етап</small>
         </v-card>
 
         <v-card class="section-card metric-card">

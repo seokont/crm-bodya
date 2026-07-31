@@ -2,14 +2,14 @@ export type ClientType = 'PERSON' | 'FOP' | 'COMPANY';
 
 export type ClientStatus =
   | 'NEW'
-  | 'IN_PROGRESS'
-  | 'CONTACTED'
-  | 'WAITING'
+  | 'NO_ANSWER'
+  | 'CALL_LATER'
+  | 'FUTURE_PROSPECT'
   | 'INTERESTED'
-  | 'NOT_INTERESTED'
-  | 'CLIENT'
-  | 'REJECTED'
-  | 'ARCHIVED';
+  | 'SIGNED_CONTRACT'
+  | 'PARTIALLY_PAID'
+  | 'FULLY_PAID'
+  | 'LOST';
 
 export interface Manager {
   id: number;
@@ -102,14 +102,19 @@ export type ClientTaskStatus =
   | 'CANCELLED';
 
 export type ClientTaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+export type ClientTaskKind = 'GENERAL' | 'CALL';
 
 export interface ClientTask {
   id: number;
   title: string;
   description: string | null;
+  kind: ClientTaskKind;
   status: ClientTaskStatus;
   priority: ClientTaskPriority;
   dueAt: string | null;
+  remindAt: string | null;
+  reminderNotifiedAt: string | null;
+  reminderReadAt: string | null;
   completedAt: string | null;
   clientId: number;
   assigneeId: number | null;
@@ -132,9 +137,11 @@ export interface ClientTask {
 export interface ClientTaskPayload {
   title: string;
   description: string;
+  kind?: ClientTaskKind;
   status: ClientTaskStatus;
   priority: ClientTaskPriority;
   dueAt: string | null;
+  remindAt?: string | null;
   assigneeId: number | null;
 }
 
@@ -339,6 +346,30 @@ export interface SelectOption<T = string> {
   value: T;
 }
 
+export const CLIENT_TABLE_COLUMN_OPTIONS = [
+  { title: 'ID', value: 'id' },
+  { title: 'Клієнт', value: 'client', required: true },
+  { title: 'ЄДРПОУ', value: 'edrpou' },
+  { title: 'Телефон', value: 'phone' },
+  { title: 'Email', value: 'email' },
+  { title: 'Місто', value: 'city' },
+  { title: 'Статус', value: 'status' },
+  { title: 'Джерело', value: 'source' },
+  { title: 'Менеджер', value: 'manager' },
+  { title: 'Створено', value: 'createdAt' },
+  { title: 'Оновлено', value: 'updatedAt' },
+] as const;
+
+export type ClientTableColumnKey =
+  (typeof CLIENT_TABLE_COLUMN_OPTIONS)[number]['value'];
+
+export const DEFAULT_CLIENT_TABLE_COLUMNS: ClientTableColumnKey[] =
+  CLIENT_TABLE_COLUMN_OPTIONS.map((column) => column.value);
+
+export interface ClientTablePreferences {
+  columns: ClientTableColumnKey[];
+}
+
 export const CLIENT_TYPES: SelectOption<ClientType>[] = [
   { title: 'Фізична особа', value: 'PERSON' },
   { title: 'ФОП', value: 'FOP' },
@@ -346,15 +377,15 @@ export const CLIENT_TYPES: SelectOption<ClientType>[] = [
 ];
 
 export const CLIENT_STATUSES: SelectOption<ClientStatus>[] = [
-  { title: 'Новий', value: 'NEW' },
-  { title: 'У роботі', value: 'IN_PROGRESS' },
-  { title: "Зв'язалися", value: 'CONTACTED' },
-  { title: 'Очікує рішення', value: 'WAITING' },
+  { title: 'Новий клієнт', value: 'NEW' },
+  { title: 'Не бере телефон', value: 'NO_ANSWER' },
+  { title: 'Передзвонити пізніше', value: 'CALL_LATER' },
+  { title: 'Дізнавався на перспективу', value: 'FUTURE_PROSPECT' },
   { title: 'Зацікавлений', value: 'INTERESTED' },
-  { title: 'Не зацікавлений', value: 'NOT_INTERESTED' },
-  { title: 'Клієнт', value: 'CLIENT' },
-  { title: 'Відмова', value: 'REJECTED' },
-  { title: 'Архів', value: 'ARCHIVED' },
+  { title: 'Підписав договір', value: 'SIGNED_CONTRACT' },
+  { title: 'Оплатив першу частину', value: 'PARTIALLY_PAID' },
+  { title: 'Оплатив повністю', value: 'FULLY_PAID' },
+  { title: 'Злив', value: 'LOST' },
 ];
 
 export const CLIENT_SOURCES: SelectOption[] = [

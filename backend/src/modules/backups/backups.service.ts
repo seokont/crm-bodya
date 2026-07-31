@@ -9,6 +9,7 @@ const userColumns = [
   'role',
   'isActive',
   'lastLoginAt',
+  'clientTableColumns',
   'createdAt',
   'updatedAt',
 ];
@@ -93,9 +94,13 @@ const taskColumns = [
   'id',
   'title',
   'description',
+  'kind',
   'status',
   'priority',
   'dueAt',
+  'remindAt',
+  'reminderNotifiedAt',
+  'reminderReadAt',
   'completedAt',
   'clientId',
   'assigneeId',
@@ -231,7 +236,9 @@ export class BackupsService {
       return `'${value.toISOString().slice(0, 23).replace('T', ' ')}'`;
     }
 
-    const escaped = String(value)
+    const serialized =
+      typeof value === 'object' ? JSON.stringify(value) : String(value);
+    const escaped = serialized
       .replace(/\\/g, '\\\\')
       .replace(/\0/g, '\\0')
       .replace(/\n/g, '\\n')

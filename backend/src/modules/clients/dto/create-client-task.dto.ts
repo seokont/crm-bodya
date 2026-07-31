@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { TaskPriority, TaskStatus } from '@prisma/client';
+import { TaskKind, TaskPriority, TaskStatus } from '@prisma/client';
 import {
   IsEnum,
   IsInt,
@@ -24,6 +24,11 @@ export class CreateClientTaskDto {
   @MaxLength(3000)
   description?: string;
 
+  @ApiPropertyOptional({ enum: TaskKind, default: TaskKind.GENERAL })
+  @IsOptional()
+  @IsEnum(TaskKind)
+  kind?: TaskKind;
+
   @ApiPropertyOptional({ enum: TaskStatus, default: TaskStatus.TODO })
   @IsOptional()
   @IsEnum(TaskStatus)
@@ -38,6 +43,11 @@ export class CreateClientTaskDto {
   @IsOptional()
   @IsISO8601()
   dueAt?: string;
+
+  @ApiPropertyOptional({ example: '2026-08-01T11:30:00.000Z' })
+  @IsOptional()
+  @IsISO8601()
+  remindAt?: string;
 
   @ApiPropertyOptional({ example: 4 })
   @IsOptional()

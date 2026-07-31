@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import ClientStatusChip from './ClientStatusChip.vue';
 import {
+  CLIENT_TABLE_COLUMN_OPTIONS,
+  DEFAULT_CLIENT_TABLE_COLUMNS,
   clientDisplayName,
   type Client,
   type ClientSort,
+  type ClientTableColumnKey,
 } from '@/types/client';
 
 const props = defineProps<{
@@ -14,6 +17,8 @@ const props = defineProps<{
   limit: number;
   sort: ClientSort;
   loading: boolean;
+  visibleColumns: ClientTableColumnKey[];
+  preferencesSaving: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -24,6 +29,7 @@ const emit = defineEmits<{
   edit: [client: Client];
   archive: [client: Client];
   delete: [client: Client];
+  'update:columns': [columns: ClientTableColumnKey[]];
 }>();
 
 interface SortItem {
@@ -51,6 +57,56 @@ const headers = [
   { title: 'Оновлено', key: 'updatedAt', sortable: true, minWidth: 130 },
   { title: '', key: 'actions', sortable: false, width: 104 },
 ] as const;
+
+const columnMenu = ref(false);
+const draftColumns = ref<ClientTableColumnKey[]>([
+  ...props.visibleColumns,
+]);
+
+const visibleHeaders = computed(() => {
+  const selected = new Set<ClientTableColumnKey>([
+    ...props.visibleColumns,
+    'client',
+  ]);
+  return headers.filter(
+    (header) =>
+      header.key === 'actions' ||
+      selected.has(header.key as ClientTableColumnKey),
+  );
+});
+
+const selectedColumnCount = computed(
+  () =>
+    new Set<ClientTableColumnKey>([...draftColumns.value, 'client']).size,
+);
+
+watch(
+  () => props.visibleColumns,
+  (columns) => {
+    if (!columnMenu.value) draftColumns.value = [...columns];
+  },
+  { deep: true },
+);
+
+watch(columnMenu, (opened) => {
+  if (opened) draftColumns.value = [...props.visibleColumns];
+});
+
+function resetColumns() {
+  draftColumns.value = [...DEFAULT_CLIENT_TABLE_COLUMNS];
+}
+
+function applyColumns() {
+  const selected = new Set<ClientTableColumnKey>([
+    ...draftColumns.value,
+    'client',
+  ]);
+  emit(
+    'update:columns',
+    DEFAULT_CLIENT_TABLE_COLUMNS.filter((column) => selected.has(column)),
+  );
+  columnMenu.value = false;
+}
 
 const sortKeyMap: Record<string, ClientSort['sortBy']> = {
   client: 'name',
@@ -113,9 +169,98 @@ function rowProps(data: { item: Client }) {
         <span class="found-label">Знайдено клієнтів</span>
         <span class="found-count">{{ total.toLocaleString('uk-UA') }}</span>
       </div>
-      <div class="table-toolbar__hint">
-        <v-icon icon="mdi-swap-vertical" size="16" />
-        Натисніть заголовок для сортування
+      <div class="table-toolbar__actions">
+        <div class="table-toolbar__hint">
+          <v-icon icon="mdi-swap-vertical" size="16" />
+          Натисніть заголовок для сортування
+        </div>
+        <v-menu
+          v-model="columnMenu"
+          :close-on-content-click="false"
+          location="bottom end"
+        >
+          <template #activator="{ props: menuProps }">
+            <v-btn
+              v-bind="menuProps"
+              variant="tonal"
+              color="primary"
+              prepend-icon="mdi-table-column"
+              size="small"
+            >
+              Поля таблиці
+            </v-btn>
+          </template>
+          <v-card class="column-settings" width="330">
+            <div class="column-settings__header">
+              <div>
+                <strong>Поля таблиці</strong>
+                <span>
+                  Відображається {{ selectedColumnCount }} з
+                  {{ CLIENT_TABLE_COLUMN_OPTIONS.length }}
+                </span>
+              </div>
+              <v-btn
+                icon="mdi-close"
+                variant="text"
+                size="small"
+                aria-label="Закрити налаштування"
+                @click="columnMenu = false"
+              />
+            </div>
+            <v-divider />
+            <div class="column-settings__list">
+              <label
+                v-for="column in CLIENT_TABLE_COLUMN_OPTIONS"
+                :key="column.value"
+                class="column-option"
+                :class="{
+                  'column-option--required':
+                    'required' in column && column.required,
+                }"
+              >
+                <input
+                  v-model="draftColumns"
+                  type="checkbox"
+                  :value="column.value"
+                  :disabled="'required' in column && column.required"
+                />
+                <span class="column-option__check" aria-hidden="true">
+                  <v-icon
+                    v-if="draftColumns.includes(column.value)"
+                    icon="mdi-check"
+                    size="14"
+                  />
+                </span>
+                <span class="column-option__copy">
+                  <span>{{ column.title }}</span>
+                  <small v-if="'required' in column && column.required">
+                    Обов’язкове
+                  </small>
+                </span>
+              </label>
+            </div>
+            <v-divider />
+            <v-card-actions class="column-settings__actions">
+              <v-btn
+                variant="text"
+                size="small"
+                :disabled="preferencesSaving"
+                @click="resetColumns"
+              >
+                Показати всі
+              </v-btn>
+              <v-spacer />
+              <v-btn
+                color="primary"
+                size="small"
+                :loading="preferencesSaving"
+                @click="applyColumns"
+              >
+                Застосувати
+              </v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-menu>
       </div>
     </div>
 
@@ -127,7 +272,7 @@ function rowProps(data: { item: Client }) {
 
     <v-data-table-server
       v-else
-      :headers="headers"
+      :headers="visibleHeaders"
       :items="items"
       :items-length="total"
       :items-per-page="limit"
@@ -297,6 +442,129 @@ function rowProps(data: { item: Client }) {
   font-size: 11px;
 }
 
+.table-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.column-settings {
+  overflow: hidden;
+  border: 1px solid #e3e8e3;
+  border-radius: 14px !important;
+}
+
+.column-settings__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 13px;
+}
+
+.column-settings__header strong,
+.column-settings__header span {
+  display: block;
+}
+
+.column-settings__header strong {
+  color: #263746;
+  font-family: Georgia, serif;
+  font-size: 17px;
+}
+
+.column-settings__header span {
+  margin-top: 4px;
+  color: #8a959d;
+  font-size: 10px;
+}
+
+.column-settings__list {
+  display: grid;
+  max-height: min(430px, 60vh);
+  padding: 10px 14px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+  overflow-y: auto;
+}
+
+.column-option {
+  position: relative;
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  color: #4d5d67;
+  cursor: pointer;
+}
+
+.column-option:hover {
+  background: #f2f7f5;
+}
+
+.column-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.column-option__check {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border: 1px solid #b9c4c0;
+  border-radius: 6px;
+  color: #fff;
+  background: #fff;
+  place-items: center;
+}
+
+.column-option input:checked + .column-option__check {
+  border-color: #26736a;
+  background: #26736a;
+}
+
+.column-option input:focus-visible + .column-option__check {
+  outline: 2px solid rgba(38, 115, 106, 0.3);
+  outline-offset: 2px;
+}
+
+.column-option__copy {
+  display: block;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.column-option__copy > span {
+  display: block;
+}
+
+.column-option__copy small {
+  display: block;
+  margin-top: 2px;
+  color: #9aa3a9;
+  font-size: 8px;
+}
+
+.column-option--required {
+  cursor: default;
+}
+
+.column-option--required:hover {
+  background: transparent;
+}
+
+.column-settings__actions {
+  min-height: 56px;
+  padding: 8px 14px !important;
+}
+
 .clients-table :deep(th) {
   height: 52px !important;
   color: #71808c !important;
@@ -407,6 +675,10 @@ function rowProps(data: { item: Client }) {
 }
 
 @media (max-width: 700px) {
+  .table-toolbar {
+    padding: 0 12px;
+  }
+
   .table-toolbar__hint {
     display: none;
   }

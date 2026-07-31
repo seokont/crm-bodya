@@ -9,6 +9,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuthTokenPayload } from './auth-user.interface';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
+import {
+  clientTableColumnKeys,
+  type ClientTableColumnKey,
+  UpdateClientTablePreferencesDto,
+} from './dto/update-client-table-preferences.dto';
 
 @Injectable()
 export class AuthService {
@@ -85,5 +90,46 @@ export class AuthService {
     });
 
     return { success: true };
+  }
+
+  async getClientTablePreferences(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { clientTableColumns: true },
+    });
+    if (!user) throw new UnauthorizedException('Користувача не знайдено');
+
+    return {
+      columns: this.normalizeClientTableColumns(user.clientTableColumns),
+    };
+  }
+
+  async updateClientTablePreferences(
+    userId: number,
+    dto: UpdateClientTablePreferencesDto,
+  ) {
+    const columns = this.normalizeClientTableColumns(dto.columns);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { clientTableColumns: columns },
+    });
+    return { columns };
+  }
+
+  private normalizeClientTableColumns(
+    value: unknown,
+  ): ClientTableColumnKey[] {
+    if (!Array.isArray(value)) return [...clientTableColumnKeys];
+
+    const selected = new Set(
+      value.filter(
+        (column): column is ClientTableColumnKey =>
+          typeof column === 'string' &&
+          clientTableColumnKeys.includes(column as ClientTableColumnKey),
+      ),
+    );
+    selected.add('client');
+
+    return clientTableColumnKeys.filter((column) => selected.has(column));
   }
 }

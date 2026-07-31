@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -6,6 +7,7 @@ import {
 import {
   ActivityType,
   Prisma,
+  TaskKind,
   TaskPriority,
   TaskStatus,
   UserRole,
@@ -24,9 +26,13 @@ const taskSelect = {
   id: true,
   title: true,
   description: true,
+  kind: true,
   status: true,
   priority: true,
   dueAt: true,
+  remindAt: true,
+  reminderNotifiedAt: true,
+  reminderReadAt: true,
   completedAt: true,
   clientId: true,
   assigneeId: true,
@@ -46,6 +52,26 @@ const taskSelect = {
     select: {
       id: true,
       name: true,
+    },
+  },
+} satisfies Prisma.ClientTaskSelect;
+
+const callReminderSelect = {
+  id: true,
+  title: true,
+  description: true,
+  status: true,
+  dueAt: true,
+  remindAt: true,
+  assigneeId: true,
+  assigneeName: true,
+  clientId: true,
+  client: {
+    select: {
+      id: true,
+      companyName: true,
+      contactName: true,
+      phone: true,
     },
   },
 } satisfies Prisma.ClientTaskSelect;
@@ -234,23 +260,38 @@ export class TasksService {
 
   async create(clientId: number, dto: CreateClientTaskDto, user: AuthUser) {
     const client = await this.ensureClient(clientId);
+    const kind = dto.kind ?? TaskKind.GENERAL;
+    const status = dto.status ?? TaskStatus.TODO;
+    const dueAt = dto.dueAt ? new Date(dto.dueAt) : null;
+    const remindAt = dto.remindAt ? new Date(dto.remindAt) : null;
     const assigneeId =
       dto.assigneeId ??
       client.managerId ??
-      (user.role === UserRole.MANAGER ? user.id : null);
+      (kind === TaskKind.CALL || user.role === UserRole.MANAGER
+        ? user.id
+        : null);
     const assignee = assigneeId
       ? await this.ensureAssignee(assigneeId)
       : null;
-    const status = dto.status ?? TaskStatus.TODO;
+    this.validateCallSchedule(
+      kind,
+      status,
+      dueAt,
+      remindAt,
+      assignee?.id ?? null,
+      true,
+    );
 
     return this.prisma.$transaction(async (transaction) => {
       const task = await transaction.clientTask.create({
         data: {
           title: dto.title.trim(),
           description: dto.description?.trim() || null,
+          kind,
           status,
           priority: dto.priority ?? TaskPriority.MEDIUM,
-          dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
+          dueAt,
+          remindAt,
           completedAt: status === TaskStatus.DONE ? new Date() : null,
           clientId,
           assigneeId: assignee?.id ?? null,
@@ -263,7 +304,10 @@ export class TasksService {
       await transaction.clientActivity.create({
         data: {
           type: ActivityType.SYSTEM,
-          content: `Створено завдання «${task.title}»${task.assigneeName ? ` для ${task.assigneeName}` : ''}`,
+          content:
+            kind === TaskKind.CALL
+              ? `Заплановано дзвінок на ${this.formatDateTime(dueAt!)}${task.assigneeName ? ` для ${task.assigneeName}` : ''}`
+              : `Створено завдання «${task.title}»${task.assigneeName ? ` для ${task.assigneeName}` : ''}`,
           clientId,
           authorId: user.id,
           authorName: user.name,
@@ -284,6 +328,41 @@ export class TasksService {
       dto.assigneeId !== undefined && dto.assigneeId !== null
         ? await this.ensureAssignee(dto.assigneeId)
         : null;
+    const nextKind = dto.kind ?? current.kind;
+    const nextStatus = dto.status ?? current.status;
+    const nextDueAt =
+      dto.dueAt !== undefined
+        ? dto.dueAt
+          ? new Date(dto.dueAt)
+          : null
+        : current.dueAt;
+    const nextRemindAt =
+      dto.remindAt !== undefined
+        ? dto.remindAt
+          ? new Date(dto.remindAt)
+          : null
+        : current.remindAt;
+    const nextAssigneeId =
+      dto.assigneeId !== undefined
+        ? assignee?.id ?? null
+        : current.assigneeId;
+    const scheduleChanged =
+      dto.kind !== undefined ||
+      dto.dueAt !== undefined ||
+      dto.remindAt !== undefined ||
+      dto.assigneeId !== undefined ||
+      (dto.status !== undefined &&
+        dto.status !== TaskStatus.DONE &&
+        dto.status !== TaskStatus.CANCELLED);
+
+    this.validateCallSchedule(
+      nextKind,
+      nextStatus,
+      nextDueAt,
+      nextRemindAt,
+      nextAssigneeId,
+      scheduleChanged,
+    );
 
     return this.prisma.$transaction(async (transaction) => {
       const task = await transaction.clientTask.update({
@@ -293,6 +372,7 @@ export class TasksService {
           ...(dto.description !== undefined
             ? { description: dto.description?.trim() || null }
             : {}),
+          ...(dto.kind !== undefined ? { kind: dto.kind } : {}),
           ...(dto.status !== undefined
             ? {
                 status: dto.status,
@@ -306,10 +386,19 @@ export class TasksService {
           ...(dto.dueAt !== undefined
             ? { dueAt: dto.dueAt ? new Date(dto.dueAt) : null }
             : {}),
+          ...(dto.remindAt !== undefined
+            ? { remindAt: dto.remindAt ? new Date(dto.remindAt) : null }
+            : {}),
           ...(dto.assigneeId !== undefined
             ? {
                 assigneeId: assignee?.id ?? null,
                 assigneeName: assignee?.name ?? null,
+              }
+            : {}),
+          ...(scheduleChanged
+            ? {
+                reminderNotifiedAt: null,
+                reminderReadAt: null,
               }
             : {}),
         },
@@ -319,8 +408,14 @@ export class TasksService {
       const events: Prisma.ClientActivityCreateManyInput[] = [];
       if (dto.status && dto.status !== current.status) {
         events.push({
-          type: ActivityType.SYSTEM,
-          content: `Статус завдання «${task.title}» змінено: «${taskStatusLabels[current.status]}» → «${taskStatusLabels[dto.status]}»`,
+          type:
+            current.kind === TaskKind.CALL && dto.status === TaskStatus.DONE
+              ? ActivityType.CALL
+              : ActivityType.SYSTEM,
+          content:
+            current.kind === TaskKind.CALL && dto.status === TaskStatus.DONE
+              ? `Запланований дзвінок виконано${task.description ? `: ${task.description}` : ''}`
+              : `Статус завдання «${task.title}» змінено: «${taskStatusLabels[current.status]}» → «${taskStatusLabels[dto.status]}»`,
           clientId,
           authorId: user.id,
           authorName: user.name,
@@ -343,6 +438,70 @@ export class TasksService {
       }
       return task;
     });
+  }
+
+  async findDueCallReminders(user: AuthUser) {
+    const now = new Date();
+    const items = await this.prisma.clientTask.findMany({
+      where: {
+        kind: TaskKind.CALL,
+        status: { in: [TaskStatus.TODO, TaskStatus.IN_PROGRESS] },
+        assigneeId: user.id,
+        remindAt: { lte: now },
+        reminderReadAt: null,
+        client: { isArchived: false },
+      },
+      select: {
+        ...callReminderSelect,
+        reminderNotifiedAt: true,
+      },
+      orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
+      take: 30,
+    });
+    const freshIds = items
+      .filter((item) => item.reminderNotifiedAt === null)
+      .map((item) => item.id);
+
+    if (freshIds.length) {
+      await this.prisma.clientTask.updateMany({
+        where: { id: { in: freshIds }, assigneeId: user.id },
+        data: { reminderNotifiedAt: now },
+      });
+    }
+
+    return {
+      items: items.map(({ reminderNotifiedAt: _notifiedAt, ...item }) => item),
+      unreadCount: items.length,
+      freshIds,
+    };
+  }
+
+  async markCallReminderRead(taskId: number, user: AuthUser) {
+    const result = await this.prisma.clientTask.updateMany({
+      where: {
+        id: taskId,
+        kind: TaskKind.CALL,
+        assigneeId: user.id,
+      },
+      data: { reminderReadAt: new Date() },
+    });
+    if (!result.count) {
+      throw new NotFoundException('Нагадування про дзвінок не знайдено');
+    }
+    return { success: true };
+  }
+
+  async markAllCallRemindersRead(user: AuthUser) {
+    await this.prisma.clientTask.updateMany({
+      where: {
+        kind: TaskKind.CALL,
+        assigneeId: user.id,
+        reminderReadAt: null,
+        remindAt: { lte: new Date() },
+      },
+      data: { reminderReadAt: new Date() },
+    });
+    return { success: true };
   }
 
   async remove(clientId: number, taskId: number, user: AuthUser) {
@@ -375,7 +534,7 @@ export class TasksService {
 
   private async ensureAssignee(id: number) {
     const manager = await this.prisma.user.findFirst({
-      where: { id, role: UserRole.MANAGER, isActive: true },
+      where: { id, isActive: true },
       select: { id: true, name: true },
     });
     if (!manager) {
@@ -394,8 +553,11 @@ export class TasksService {
       select: {
         id: true,
         title: true,
+        kind: true,
         status: true,
         completedAt: true,
+        dueAt: true,
+        remindAt: true,
         assigneeId: true,
         assigneeName: true,
         creatorId: true,
@@ -414,6 +576,52 @@ export class TasksService {
       throw new ForbiddenException('Ви не можете змінювати це завдання');
     }
     return task;
+  }
+
+  private validateCallSchedule(
+    kind: TaskKind,
+    status: TaskStatus,
+    dueAt: Date | null,
+    remindAt: Date | null,
+    assigneeId: number | null,
+    requireFuture: boolean,
+  ) {
+    if (
+      kind !== TaskKind.CALL ||
+      status === TaskStatus.DONE ||
+      status === TaskStatus.CANCELLED
+    ) {
+      return;
+    }
+    if (!dueAt) {
+      throw new BadRequestException('Вкажіть дату та час дзвінка');
+    }
+    if (!remindAt) {
+      throw new BadRequestException('Вкажіть час нагадування');
+    }
+    if (!assigneeId) {
+      throw new BadRequestException(
+        'Призначте відповідального за дзвінок',
+      );
+    }
+    if (remindAt.getTime() > dueAt.getTime()) {
+      throw new BadRequestException(
+        'Нагадування має бути раніше запланованого дзвінка',
+      );
+    }
+    if (requireFuture && dueAt.getTime() <= Date.now()) {
+      throw new BadRequestException(
+        'Запланований дзвінок має бути в майбутньому',
+      );
+    }
+  }
+
+  private formatDateTime(value: Date) {
+    return new Intl.DateTimeFormat('uk-UA', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+      timeZone: 'Europe/Kyiv',
+    }).format(value);
   }
 
   private taskScopeConditions(user: AuthUser): Prisma.ClientTaskWhereInput[] {

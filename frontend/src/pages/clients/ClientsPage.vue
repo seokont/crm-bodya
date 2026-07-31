@@ -6,14 +6,18 @@ import ClientCreateDialog from '@/components/clients/ClientCreateDialog.vue';
 import ClientEditDialog from '@/components/clients/ClientEditDialog.vue';
 import ClientFiltersPanel from '@/components/clients/ClientFilters.vue';
 import ClientTable from '@/components/clients/ClientTable.vue';
+import { authApi } from '@/services/auth.api';
+import { getApiError } from '@/services/http';
 import { useClientsStore } from '@/stores/clients';
 import {
+  DEFAULT_CLIENT_TABLE_COLUMNS,
   emptyClientFilters,
   type Client,
   type ClientFilters,
   type ClientPayload,
   type ClientSort,
   type ClientStatus,
+  type ClientTableColumnKey,
 } from '@/types/client';
 
 const store = useClientsStore();
@@ -31,6 +35,10 @@ const draftFilters = ref<ClientFilters>(emptyClientFilters());
 const snackbar = ref(false);
 const snackbarMessage = ref('');
 const snackbarColor = ref('success');
+const visibleColumns = ref<ClientTableColumnKey[]>([
+  ...DEFAULT_CLIENT_TABLE_COLUMNS,
+]);
+const preferencesSaving = ref(false);
 
 const stringQuery = (value: unknown) =>
   typeof value === 'string' ? value : '';
@@ -132,6 +140,32 @@ function showMessage(message: string, color = 'success') {
   snackbar.value = true;
 }
 
+async function loadTablePreferences() {
+  try {
+    const preferences = await authApi.getClientTablePreferences();
+    visibleColumns.value = preferences.columns;
+  } catch (requestError) {
+    showMessage(
+      `Не вдалося завантажити поля таблиці: ${getApiError(requestError)}`,
+      'error',
+    );
+  }
+}
+
+async function updateTableColumns(columns: ClientTableColumnKey[]) {
+  preferencesSaving.value = true;
+  try {
+    const preferences =
+      await authApi.updateClientTablePreferences(columns);
+    visibleColumns.value = preferences.columns;
+    showMessage('Поля таблиці збережено');
+  } catch (requestError) {
+    showMessage(getApiError(requestError), 'error');
+  } finally {
+    preferencesSaving.value = false;
+  }
+}
+
 async function createClient(payload: ClientPayload) {
   try {
     const client = await store.createClient(payload);
@@ -208,7 +242,11 @@ watch(
 
 onMounted(async () => {
   readQueryState();
-  await Promise.all([store.fetchManagers(), store.fetchClients()]);
+  await Promise.all([
+    store.fetchManagers(),
+    store.fetchClients(),
+    loadTablePreferences(),
+  ]);
   if (route.query.create === '1') {
     createDialog.value = true;
     const query = { ...route.query };
@@ -270,6 +308,8 @@ onMounted(async () => {
       :limit="store.limit"
       :sort="store.sort"
       :loading="store.loading"
+      :visible-columns="visibleColumns"
+      :preferences-saving="preferencesSaving"
       @update:page="updatePage"
       @update:limit="updateLimit"
       @update:sort="updateSort"
@@ -277,6 +317,7 @@ onMounted(async () => {
       @edit="openEdit"
       @archive="requestArchive"
       @delete="requestDelete"
+      @update:columns="updateTableColumns"
     />
 
     <v-navigation-drawer

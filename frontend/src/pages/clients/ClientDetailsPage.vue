@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import ClientDealDialog from '@/components/clients/ClientDealDialog.vue';
+import ClientCallScheduler from '@/components/clients/ClientCallScheduler.vue';
 import ClientCommentsPanel from '@/components/clients/ClientCommentsPanel.vue';
 import ClientDocumentsPanel from '@/components/clients/ClientDocumentsPanel.vue';
 import ClientEditDialog from '@/components/clients/ClientEditDialog.vue';
@@ -50,6 +51,7 @@ const editingDeal = ref<ClientDeal | null>(null);
 const dealFilter = ref<'ALL' | ClientDealStage>('ALL');
 const deleteDealDialog = ref(false);
 const dealToDelete = ref<ClientDeal | null>(null);
+const taskPanelKey = ref(0);
 const clientId = computed(() => Number(route.params.id));
 const client = computed(() => store.selectedClient);
 const creatorDisplayName = computed(
@@ -410,6 +412,11 @@ async function saveClient(payload: ClientPayload) {
   } catch {
     notify(store.error, 'error');
   }
+}
+
+async function handleTasksChanged() {
+  taskPanelKey.value += 1;
+  await fetchActivities();
 }
 
 onMounted(async () => {
@@ -983,10 +990,11 @@ onMounted(async () => {
               </v-window-item>
               <v-window-item value="tasks">
                 <ClientTasksPanel
+                  :key="taskPanelKey"
                   :client-id="client.id"
                   :client-manager-id="client.managerId"
                   :managers="store.managers"
-                  @changed="fetchActivities"
+                  @changed="handleTasksChanged"
                 />
               </v-window-item>
             </v-window>
@@ -994,6 +1002,16 @@ onMounted(async () => {
         </div>
 
         <aside class="details-aside">
+          <v-card class="section-card call-calendar-card">
+            <ClientCallScheduler
+              :client-id="client.id"
+              :client-manager-id="client.managerId"
+              :managers="store.managers"
+              @changed="handleTasksChanged"
+              @notify="notify"
+            />
+          </v-card>
+
           <v-card class="section-card manager-card">
             <div class="aside-label">Відповідальний</div>
             <div v-if="client.manager" class="manager-profile">

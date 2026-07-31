@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import { useDisplay } from "vuetify";
+import CallReminderPopup from "@/components/CallReminderPopup.vue";
+import NotificationBell from "@/components/NotificationBell.vue";
 import { backupsApi } from "@/services/backups.api";
 import { getApiError } from "@/services/http";
 import { useAuthStore } from "@/stores/auth";
+import { useCallRemindersStore } from "@/stores/call-reminders";
 import { useTeamChatStore } from "@/stores/team-chat";
 
 const { mdAndUp } = useDisplay();
 const route = useRoute();
-const router = useRouter();
 const auth = useAuthStore();
+const callReminders = useCallRemindersStore();
 const teamChat = useTeamChatStore();
 const mobileMenu = ref(false);
 const largeText = ref(localStorage.getItem("bodya-large-text") === "true");
@@ -52,24 +55,8 @@ const roleLabel = computed(() =>
 const fontButtonLabel = computed(() =>
   largeText.value ? "Звичайний шрифт" : "Збільшити шрифт",
 );
-const chatNotificationLabel = computed(() =>
-  teamChat.unreadCount
-    ? `Нові повідомлення в чаті: ${teamChat.unreadCount}`
-    : "Відкрити командний чат",
-);
-
 function toggleLargeText() {
   largeText.value = !largeText.value;
-}
-
-function openTeamChat() {
-  mobileMenu.value = false;
-  const target = teamChat.firstUnreadTarget;
-  void router.push(
-    target?.partnerId
-      ? { path: "/chat", query: { partner: String(target.partnerId) } }
-      : "/chat",
-  );
 }
 
 async function downloadBackup() {
@@ -101,8 +88,10 @@ watch(
   (userId) => {
     if (userId) {
       void teamChat.connect(userId);
+      callReminders.start(userId);
     } else {
       teamChat.disconnect();
+      callReminders.stop();
     }
   },
   { immediate: true },
@@ -112,6 +101,7 @@ watch(
 
 <template>
   <v-app>
+    <CallReminderPopup v-if="!route.meta.public" />
     <v-btn
       v-if="route.meta.public"
       class="login-font-button"
@@ -136,21 +126,9 @@ watch(
             <div class="brand__name">Bodya</div>
             <div class="brand__caption">CRM-простір</div>
           </div>
-          <v-btn
-            class="chat-notification-button ml-auto"
-            :class="{ 'has-unread': teamChat.unreadCount > 0 }"
-            icon
-            variant="text"
-            size="small"
-            :aria-label="chatNotificationLabel"
-            @click="openTeamChat"
-          >
-            <v-icon icon="mdi-bell-outline" />
-            <span
-              v-if="teamChat.unreadCount"
-              class="chat-notification-dot"
-            />
-          </v-btn>
+          <div class="ml-auto">
+            <NotificationBell />
+          </div>
         </div>
 
         <div class="sidebar-label">Робочий простір</div>
@@ -241,20 +219,7 @@ watch(
           <div class="brand__name">Bodya</div>
         </div>
         <v-spacer />
-        <v-btn
-          class="chat-notification-button"
-          :class="{ 'has-unread': teamChat.unreadCount > 0 }"
-          icon
-          variant="text"
-          :aria-label="chatNotificationLabel"
-          @click="openTeamChat"
-        >
-          <v-icon icon="mdi-bell-outline" />
-          <span
-            v-if="teamChat.unreadCount"
-            class="chat-notification-dot"
-          />
-        </v-btn>
+        <NotificationBell />
         <v-btn
           icon="mdi-format-size"
           variant="text"
