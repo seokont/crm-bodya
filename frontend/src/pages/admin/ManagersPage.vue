@@ -419,7 +419,11 @@ onMounted(async () => {
         </v-card-title>
         <v-divider />
         <v-card-text class="pa-6">
-          <v-form ref="editFormRef" @submit.prevent="updateManager">
+          <v-form
+            ref="editFormRef"
+            class="modal-input-stack"
+            @submit.prevent="updateManager"
+          >
             <v-text-field
               v-model="editForm.name"
               label="Ім'я та прізвище"
@@ -477,7 +481,11 @@ onMounted(async () => {
         </v-card-title>
         <v-divider />
         <v-card-text class="pa-6">
-          <v-form ref="formRef" @submit.prevent="createManager">
+          <v-form
+            ref="formRef"
+            class="modal-input-stack"
+            @submit.prevent="createManager"
+          >
             <v-text-field
               v-model="createForm.name"
               label="Ім'я та прізвище"
@@ -616,7 +624,11 @@ onMounted(async () => {
         </v-card-title>
         <v-divider />
         <v-card-text class="pa-6">
-          <v-form ref="passwordFormRef" @submit.prevent="resetPassword">
+          <v-form
+            ref="passwordFormRef"
+            class="modal-input-stack"
+            @submit.prevent="resetPassword"
+          >
             <v-text-field
               v-model="newPassword"
               label="Новий пароль"

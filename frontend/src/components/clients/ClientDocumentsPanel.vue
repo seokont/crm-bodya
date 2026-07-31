@@ -472,7 +472,7 @@ onMounted(fetchDocuments);
             @click="uploadDialog = false"
           />
         </v-card-title>
-        <v-card-text>
+        <v-card-text class="modal-input-stack">
           <v-file-input
             v-model="selectedFiles"
             label="Файл"
@@ -542,7 +542,7 @@ onMounted(fetchDocuments);
             @click="editDialog = false"
           />
         </v-card-title>
-        <v-card-text>
+        <v-card-text class="modal-input-stack">
           <v-text-field
             v-model="form.title"
             label="Назва документа"

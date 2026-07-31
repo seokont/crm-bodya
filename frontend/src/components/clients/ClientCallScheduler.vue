@@ -351,7 +351,7 @@ watch(() => props.clientId, fetchCalls);
           @click="dialog = false"
         />
       </v-card-title>
-      <v-card-text>
+      <v-card-text class="modal-input-stack">
         <div class="call-form-grid">
           <v-text-field
             v-model="form.scheduledAt"
@@ -535,7 +535,7 @@ watch(() => props.clientId, fetchCalls);
 .call-form-grid {
   display: grid;
   grid-template-columns: 1.2fr 1fr;
-  gap: 14px;
+  gap: 20px;
 }
 
 .call-dialog__hint {

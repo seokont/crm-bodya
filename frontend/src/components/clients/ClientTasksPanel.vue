@@ -481,7 +481,7 @@ onMounted(fetchTasks);
             @click="dialog = false"
           />
         </v-card-title>
-        <v-card-text>
+        <v-card-text class="modal-input-stack">
           <v-text-field
             v-model="form.title"
             label="Назва завдання"
@@ -831,7 +831,7 @@ onMounted(fetchTasks);
 .task-form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0 12px;
+  gap: 20px;
 }
 
 @media (max-width: 700px) {

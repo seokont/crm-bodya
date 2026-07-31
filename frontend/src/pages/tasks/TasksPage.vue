@@ -592,7 +592,7 @@ onMounted(async () => {
           </div>
           <v-btn icon="mdi-close" variant="text" :disabled="saving" @click="taskDialog = false" />
         </v-card-title>
-        <v-card-text>
+        <v-card-text class="modal-input-stack">
           <v-select
             v-model="form.clientId"
             :items="clientSelectItems"
@@ -711,7 +711,7 @@ onMounted(async () => {
 .task-dialog { padding: 8px; }
 .task-dialog :deep(.v-card-title) { display: flex; align-items: center; justify-content: space-between; color: #2e404b; font-family: Georgia, serif; }
 .task-dialog :deep(.v-card-title span) { display: block; margin-top: 3px; color: #8d979e; font-family: sans-serif; font-size: 10px; }
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 1250px) {
   .tasks-metrics { grid-template-columns: repeat(3, 1fr); }

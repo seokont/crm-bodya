@@ -657,7 +657,7 @@ onBeforeUnmount(() => {
   display: grid;
   grid-column: 2;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 20px;
 }
 
 .duplicate-notice {

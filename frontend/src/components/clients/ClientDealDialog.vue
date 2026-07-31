@@ -118,7 +118,7 @@ watch(
       </div>
 
       <v-form ref="formRef" @submit.prevent="submit">
-        <v-card-text class="deal-dialog-content">
+        <v-card-text class="deal-dialog-content modal-input-stack">
           <v-text-field
             v-model="form.title"
             label="Назва угоди"
@@ -242,7 +242,7 @@ watch(
 .deal-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 20px;
 }
 
 .deal-form-grid.amount-row {

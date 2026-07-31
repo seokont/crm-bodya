@@ -94,6 +94,15 @@ body {
   animation: notification-ring 2.4s ease-in-out infinite;
 }
 
+.modal-input-stack {
+  display: grid;
+  gap: 20px;
+}
+
+.modal-input-stack > .v-input {
+  margin: 0 !important;
+}
+
 @keyframes notification-ring {
   0%,
   58%,
