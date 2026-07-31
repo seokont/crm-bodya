@@ -8,8 +8,10 @@ import ClientFiltersPanel from '@/components/clients/ClientFilters.vue';
 import ClientTable from '@/components/clients/ClientTable.vue';
 import { authApi } from '@/services/auth.api';
 import { getApiError } from '@/services/http';
+import { useAuthStore } from '@/stores/auth';
 import { useClientsStore } from '@/stores/clients';
 import {
+  CLIENT_STATUSES,
   DEFAULT_CLIENT_TABLE_COLUMNS,
   emptyClientFilters,
   type Client,
@@ -21,6 +23,7 @@ import {
 } from '@/types/client';
 
 const store = useClientsStore();
+const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 const { mdAndUp } = useDisplay();
@@ -40,14 +43,137 @@ const visibleColumns = ref<ClientTableColumnKey[]>([
 ]);
 const preferencesSaving = ref(false);
 
+interface PersistedClientListState {
+  filters: ClientFilters;
+  page: number;
+  limit: number;
+  sort: ClientSort;
+}
+
+const listQueryKeys = [
+  'search',
+  'status',
+  'managerId',
+  'source',
+  'city',
+  'dateFrom',
+  'dateTo',
+  'page',
+  'limit',
+  'sortBy',
+  'sortOrder',
+] as const;
+const allowedStatuses = new Set(CLIENT_STATUSES.map((item) => item.value));
+const allowedSortFields = new Set<ClientSort['sortBy']>([
+  'name',
+  'createdAt',
+  'updatedAt',
+  'status',
+  'manager',
+  'city',
+]);
+
+function listStateStorageKey() {
+  return auth.user?.id
+    ? `bodya_client_list_state_${auth.user.id}`
+    : 'bodya_client_list_state';
+}
+
+function cloneFilters(filters: ClientFilters): ClientFilters {
+  return {
+    ...filters,
+    status: [...filters.status],
+    source: [...filters.source],
+  };
+}
+
+function saveListState() {
+  const state: PersistedClientListState = {
+    filters: cloneFilters(store.filters),
+    page: store.page,
+    limit: store.limit,
+    sort: { ...store.sort },
+  };
+  try {
+    localStorage.setItem(listStateStorageKey(), JSON.stringify(state));
+  } catch {
+    // Навігація продовжить працювати через query-параметри.
+  }
+}
+
+function readSavedListState(): PersistedClientListState | null {
+  try {
+    const raw = localStorage.getItem(listStateStorageKey());
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PersistedClientListState>;
+    const savedFilters = parsed.filters;
+    if (!savedFilters || typeof savedFilters !== 'object') return null;
+
+    const page = Number(parsed.page);
+    const limit = Number(parsed.limit);
+    const sortBy = parsed.sort?.sortBy;
+    return {
+      filters: {
+        search:
+          typeof savedFilters.search === 'string' ? savedFilters.search : '',
+        status: Array.isArray(savedFilters.status)
+          ? savedFilters.status.filter((status): status is ClientStatus =>
+              allowedStatuses.has(status as ClientStatus),
+            )
+          : [],
+        managerId:
+          Number.isInteger(Number(savedFilters.managerId)) &&
+          Number(savedFilters.managerId) > 0
+            ? Number(savedFilters.managerId)
+            : null,
+        source: Array.isArray(savedFilters.source)
+          ? savedFilters.source.filter(
+              (source): source is string => typeof source === 'string',
+            )
+          : [],
+        city: typeof savedFilters.city === 'string' ? savedFilters.city : '',
+        dateFrom:
+          typeof savedFilters.dateFrom === 'string'
+            ? savedFilters.dateFrom
+            : '',
+        dateTo:
+          typeof savedFilters.dateTo === 'string' ? savedFilters.dateTo : '',
+      },
+      page: Number.isInteger(page) && page > 0 ? page : 1,
+      limit: [10, 25, 50, 100].includes(limit) ? limit : 25,
+      sort: {
+        sortBy:
+          sortBy && allowedSortFields.has(sortBy) ? sortBy : 'createdAt',
+        sortOrder: parsed.sort?.sortOrder === 'asc' ? 'asc' : 'desc',
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 const stringQuery = (value: unknown) =>
   typeof value === 'string' ? value : '';
 
 function readQueryState() {
   const query = route.query;
+  const hasListQuery = listQueryKeys.some((key) => query[key] !== undefined);
+  const savedState = hasListQuery ? null : readSavedListState();
+
+  if (savedState) {
+    draftFilters.value = cloneFilters(savedState.filters);
+    store.setFilters(savedState.filters);
+    store.page = savedState.page;
+    store.limit = savedState.limit;
+    store.sort = { ...savedState.sort };
+    return;
+  }
+
   const statuses = stringQuery(query.status)
     .split(',')
-    .filter(Boolean) as ClientStatus[];
+    .filter((status): status is ClientStatus =>
+      allowedStatuses.has(status as ClientStatus),
+    );
   const sources = stringQuery(query.source).split(',').filter(Boolean);
 
   draftFilters.value = {
@@ -91,6 +217,7 @@ async function syncQuery() {
         : {}),
     },
   });
+  saveListState();
 }
 
 async function refresh() {
@@ -241,17 +368,16 @@ watch(
 );
 
 onMounted(async () => {
+  const shouldOpenCreateDialog = route.query.create === '1';
   readQueryState();
+  await syncQuery();
   await Promise.all([
     store.fetchManagers(),
     store.fetchClients(),
     loadTablePreferences(),
   ]);
-  if (route.query.create === '1') {
+  if (shouldOpenCreateDialog) {
     createDialog.value = true;
-    const query = { ...route.query };
-    delete query.create;
-    await router.replace({ query });
   }
 });
 </script>
